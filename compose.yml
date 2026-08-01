@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:17
+    container_name: model-serve-mini-db
+
+    environment:
+      POSTGRES_DB: model_serve_mini
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d model_serve_mini"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
