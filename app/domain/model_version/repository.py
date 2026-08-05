@@ -1,6 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.domain.model_version.enums import DeploymentStatus
 from app.domain.model_version.model import ModelVersion
 from app.domain.training_job_model_version.enums import ModelVersionRelationType
 from app.domain.training_job_model_version.model import TrainingJobModelVersion
@@ -25,6 +26,11 @@ def find_result_by_training_job_id(db: Session, training_job_id: int) -> ModelVe
 
     return db.scalar(stmt)
 
+def find_deploy_version_by_id(db: Session, model_id: int) -> ModelVersion | None:
+    stmt = select(ModelVersion).where(
+        ModelVersion.model_id == model_id, ModelVersion.deployment_status == DeploymentStatus.PRODUCTION.value)
+
+    return db.scalar(stmt)
 
 def find_by_artifact_uri(db: Session, artifact_uri: str) -> ModelVersion | None:
     stmt = select(ModelVersion).where(

@@ -85,6 +85,17 @@ class ModelVersion(Base):
         nullable=True
     )
 
+    feature_columns: Mapped[list[str]] = mapped_column(
+        JSONB,
+        nullable=False
+    )
+
+    deployment_status: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        server_default="NONE"
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

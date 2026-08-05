@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.domain.model import repository as model_repository
 from app.domain.model.exceptions import ModelNotFound
 from app.domain.model_version import repository
+from app.domain.model_version.enums import DeploymentStatus
 from app.domain.model_version.exceptions import (
     ArtifactAlreadyExists,
     ModelVersionAlreadyExists,
@@ -30,6 +31,27 @@ def get_model_versions(db: Session, model_id: int) -> list[ModelVersion]:
 
     return repository.find_all_by_model_id(db, model_id)
 
+def deploy_model_version(db: Session, model_version_id: int) -> ModelVersion:
+
+    try:
+        model_version = repository.find_by_id(db, model_version_id)
+
+        if model_version is None:
+            raise ModelVersionNotFound(model_version_id)
+
+        prev_deployed_version = repository.find_deploy_version_by_id(db, model_version.model_id)
+
+        model_version.deployment_status = DeploymentStatus.PRODUCTION.value
+        if prev_deployed_version is not None:
+            prev_deployed_version.deployment_status = DeploymentStatus.ARCHIVED.value
+
+        db.commit()
+
+        return model_version
+
+    except:
+        db.rollback()
+        raise
 
 def create_model_version(db: Session, data: CreateModelVersionData) -> ModelVersion:
     training_job = training_job_repository.find_by_id(db, data.training_job_id)
@@ -75,7 +97,9 @@ def create_model_version(db: Session, data: CreateModelVersionData) -> ModelVers
         algorithm=training_job.algorithm,
         training_config=training_job.training_config,
         metrics=data.metrics,
-        input_schema=data.input_schema
+        input_schema=data.input_schema,
+        feature_columns=data.feature_columns,
+        deployment_status=DeploymentStatus.NONE.value,
     )
 
     try:

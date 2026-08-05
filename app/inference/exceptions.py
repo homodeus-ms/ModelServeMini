@@ -51,3 +51,20 @@ class InferenceFailed(AppException):
             detail="Inference failed",
             message=message
         )
+
+class InvalidInferenceInputValue(AppException):
+    def __init__(self, column: str, value_type: str):
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported inference input value",
+            column=column,
+            value_type=value_type
+        )
+
+class DeployVersionNotFound(AppException):
+    def __init__(self, message: str):
+        super().__init__(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Should Deploy One First",
+            message=message
+        )

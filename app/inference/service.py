@@ -7,23 +7,35 @@ from sqlalchemy.orm import Session
 
 from app.domain.model_version import repository as model_version_repository
 from app.domain.model_version.exceptions import ModelVersionNotFound
+from app.domain.model_version import repository as model_version_repository
 from app.inference.exceptions import (
     InferenceFailed,
     InvalidInferenceInput,
     ModelArtifactLoadFailed,
     ModelArtifactNotFound,
-    NonNumericInferenceInput
+    NonNumericInferenceInput, InvalidInferenceInputValue, DeployVersionNotFound
 )
 
 from app.inference.schema import InferenceRequest, InferenceResponse
 
+def predict_by_model(db: Session, model_id, request: InferenceRequest) -> InferenceResponse:
+    deploy_version = model_version_repository.find_deploy_version_by_id(db, model_id)
+    if deploy_version is None:
+        raise DeployVersionNotFound(model_id)
 
-def predict(db: Session, request: InferenceRequest) -> InferenceResponse:
+    return predict(db, deploy_version.id, request)
 
-    model_version = model_version_repository.find_by_id(db, request.model_version_id)
+
+def predict_by_model_version(db: Session, model_version_id: int,
+                             request: InferenceRequest) -> InferenceResponse:
+    return predict(db, model_version_id, request)
+
+def predict(db: Session, model_version_id: int, request: InferenceRequest) -> InferenceResponse:
+
+    model_version = model_version_repository.find_by_id(db, model_version_id)
 
     if model_version is None:
-        raise ModelVersionNotFound(request.model_version_id)
+        raise ModelVersionNotFound(model_version_id)
 
     artifact_path = Path(model_version.artifact_uri)
 
@@ -42,18 +54,24 @@ def predict(db: Session, request: InferenceRequest) -> InferenceResponse:
     except Exception:
         raise ModelArtifactLoadFailed(model_version.artifact_uri)
 
+    # 1건
     dataframe = pd.DataFrame([ordered_input], columns=expected_columns)
 
     try:
         predictions = estimator.predict(dataframe)
         prediction = _to_python_value(predictions[0])
 
-        probabilities = None
+        probabilities: dict[str, float] | None = None
 
+        # RandomForestClassifier인 경우
         if hasattr(estimator, "predict_proba"):
             probability_result = estimator.predict_proba(dataframe)[0]
+            class_labels = estimator.classes_
 
-            probabilities = [float(value) for value in probability_result]
+            probabilities = {
+                str(class_label): float(probability)
+                for class_label, probability in zip(class_labels, probability_result)
+            }
 
     except Exception as exc:
         raise InferenceFailed(str(exc))
@@ -65,9 +83,8 @@ def predict(db: Session, request: InferenceRequest) -> InferenceResponse:
     )
 
 
-def _get_expected_columns(
-    input_schema: dict[str, Any] | None
-) -> list[str]:
+def _get_expected_columns(input_schema: dict[str, Any] | None) -> list[str]:
+
     if input_schema is None:
         raise InvalidInferenceInput()
 
@@ -114,20 +131,19 @@ def _validate_input_columns(
         )
 
 
-def _create_ordered_input(
-    input_data: dict[str, Any],
-    expected_columns: list[str]
-) -> dict[str, int | float]:
-    ordered_input: dict[str, int | float] = {}
+def _create_ordered_input(input_data: dict[str, Any], expected_columns: list[str]) -> dict[str, int | float]:
+
+    ordered_input: dict[str, Any] = {}
 
     for column in expected_columns:
+
         value = input_data[column]
 
-        if isinstance(value, bool) or not isinstance(
-            value,
-            (int, float)
-        ):
-            raise NonNumericInferenceInput(column)
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            raise InvalidInferenceInputValue(
+                column=column,
+                value_type=type(value).__name__
+            )
 
         ordered_input[column] = value
 

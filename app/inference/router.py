@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -14,7 +14,17 @@ router = APIRouter(
     tags=["Inference"]
 )
 
+@router.post("/models/{model_id}/predict", response_model=InferenceResponse)
+def predict_by_model(request: InferenceRequest,
+            model_id: int = Path(gt=0),
+            db: Session = Depends(get_db)) -> InferenceResponse:
 
-@router.post("/predict", response_model=InferenceResponse)
-def predict(request: InferenceRequest, db: Session = Depends(get_db)) -> InferenceResponse:
-    return service.predict(db, request)
+    return service.predict_by_model(db, model_id, request)
+
+
+@router.post("/model_versions/{model_version_id}/predict", response_model=InferenceResponse)
+def predict_by_model_version(request: InferenceRequest,
+            model_version_id: int = Path(gt=0),
+            db: Session = Depends(get_db)) -> InferenceResponse:
+
+    return service.predict_by_model_version(db, model_version_id, request)

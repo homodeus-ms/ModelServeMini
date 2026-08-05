@@ -15,8 +15,11 @@ def complete_training_job(
     artifact_size: int | None,
     artifact_checksum: str | None,
     metrics: dict,
-    input_schema: dict | None
+    input_schema: dict | None,
+    feature_columns: list[str],
 ) -> ModelVersion:
+
+    # model_version 객체와 training_job_model_version 관계 객체 생성함
 
     training_job = training_job_repository.find_by_id(
         db,
@@ -32,7 +35,8 @@ def complete_training_job(
         artifact_size=artifact_size,
         artifact_checksum=artifact_checksum,
         metrics=metrics,
-        input_schema=input_schema
+        input_schema=input_schema,
+        feature_columns=feature_columns,
     )
 
     try:

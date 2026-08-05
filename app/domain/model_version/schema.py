@@ -13,6 +13,7 @@ class CreateModelVersionData(BaseModel):
 
     metrics: dict[str, Any]
     input_schema: dict[str, Any] | None = None
+    feature_columns: list[str]
 
 
 class ModelVersionResponse(BaseModel):
@@ -32,5 +33,8 @@ class ModelVersionResponse(BaseModel):
     training_config: dict[str, Any]
     metrics: dict[str, Any]
     input_schema: dict[str, Any] | None
+    feature_columns: list[str]
+    deployment_status: str
 
     created_at: datetime
+

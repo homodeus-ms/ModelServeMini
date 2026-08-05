@@ -1,6 +1,5 @@
 from enum import Enum
 
-
 class TrainingJobStatus(str, Enum):
     PENDING = "PENDING"
     RUNNING = "RUNNING"
@@ -14,3 +13,4 @@ class TrainingAlgorithm(str, Enum):
     RANDOM_FOREST_CLASSIFIER = "RANDOM_FOREST_CLASSIFIER"
     LINEAR_REGRESSION = "LINEAR_REGRESSION"
     RANDOM_FOREST_REGRESSOR = "RANDOM_FOREST_REGRESSOR"
+

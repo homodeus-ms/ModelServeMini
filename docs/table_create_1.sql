@@ -275,6 +275,7 @@ CREATE TABLE model_versions (
     training_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     metrics JSONB NOT NULL DEFAULT '{}'::jsonb,
     input_schema JSONB,
+    feature_columns JSONB NOT NULL,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
