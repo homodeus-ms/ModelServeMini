@@ -27,7 +27,7 @@ from app.domain.training_job.model import TrainingJob
 from app.domain.training_job.schema import CreateTrainingJobRequest
 from app.domain.training_job import transitions
 from app.domain.training_job_model_version import service as relation_service
-
+from app.training.consts import ALGORITHMS_BY_TASK_TYPE
 
 CLASSIFICATION_ALGORITHMS = {
     TrainingAlgorithm.LOGISTIC_REGRESSION,
@@ -223,7 +223,7 @@ def _validate_dataset_version_ready(dataset_version) -> None:
 
 def _validate_algorithm(task_type: str, algorithm: TrainingAlgorithm) -> None:
     if task_type == ModelTaskType.CLASSIFICATION.value:
-        if algorithm not in CLASSIFICATION_ALGORITHMS:
+        if  algorithm not in ALGORITHMS_BY_TASK_TYPE.get(ModelTaskType.CLASSIFICATION):
             raise AlgorithmNotCompatible(
                 task_type,
                 algorithm.value
@@ -232,7 +232,7 @@ def _validate_algorithm(task_type: str, algorithm: TrainingAlgorithm) -> None:
         return
 
     if task_type == ModelTaskType.REGRESSION.value:
-        if algorithm not in REGRESSION_ALGORITHMS:
+        if algorithm not in ALGORITHMS_BY_TASK_TYPE.get(ModelTaskType.REGRESSION):
             raise AlgorithmNotCompatible(
                 task_type,
                 algorithm.value

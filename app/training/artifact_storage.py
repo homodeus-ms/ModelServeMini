@@ -5,20 +5,38 @@ from uuid import uuid4
 
 import joblib
 
+from app.core.config import settings
+
 
 # artifact 저장, 현재는 Local drive에 -> TODO: 이후에 외부 저장소로 변경
 def save_artifact(pipeline, model_id: int) -> tuple[str, int, str]:
-    base_path = os.getenv("MODEL_STORAGE_PATH", "storage/models")
-    directory = Path(base_path) / str(model_id)
-    directory.mkdir(parents=True, exist_ok=True)
 
-    artifact_path = directory / f"{uuid4().hex}.joblib"
+    # TODO: 이후에 백엔드도 컨테이너로 넣으면 다시 이걸로 수정
+    # directory = Path(settings.model_storage_path) / str(model_id)
+    # directory.mkdir(parents=True, exist_ok=True)
+    #
+    # artifact_path = directory / f"{uuid4().hex}.joblib"
+    # joblib.dump(pipeline, artifact_path)
+    #
+    # artifact_size = artifact_path.stat().st_size
+    # artifact_checksum = _calculate_checksum(artifact_path)
+    #
+    # return str(artifact_path), artifact_size, artifact_checksum
+
+    relative_path = Path("models") / str(model_id) / f"{uuid4().hex}.joblib"
+
+    artifact_path = Path(settings.model_storage_path) / relative_path
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+
     joblib.dump(pipeline, artifact_path)
-
     artifact_size = artifact_path.stat().st_size
     artifact_checksum = _calculate_checksum(artifact_path)
 
-    return str(artifact_path), artifact_size, artifact_checksum
+    return (
+        str(relative_path),
+        artifact_size,
+        artifact_checksum,
+    )
 
 
 def _calculate_checksum(path: Path) -> str:

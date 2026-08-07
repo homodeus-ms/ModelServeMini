@@ -43,3 +43,11 @@ class TrainModelsResponse(BaseModel):
     failure_count: int
     failures: list[TrainingFailureResult]
     recommendation: Recommendation | None = Field(default=None)
+
+class TrainingModelSummaryInfo(BaseModel):
+    training_job_id: int
+    algorithm: str
+    status: str
+
+class TrainingModelAsyncResponse(BaseModel):
+    training_jobs: list[TrainingModelSummaryInfo]

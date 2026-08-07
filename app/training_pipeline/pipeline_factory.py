@@ -4,7 +4,6 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-
 def create_training_pipeline(features: pd.DataFrame, estimator) -> Pipeline:
 
     numeric_columns = list(features.select_dtypes(include="number").columns)
@@ -36,3 +35,4 @@ def create_training_pipeline(features: pd.DataFrame, estimator) -> Pipeline:
     )
 
     return Pipeline(steps=[("preprocessor", preprocessor), ("estimator", estimator)])
+

@@ -82,6 +82,9 @@ def create_model_version(db: Session, data: CreateModelVersionData) -> ModelVers
     if existing_artifact is not None:
         raise ArtifactAlreadyExists(data.artifact_uri)
 
+    # DB 락 획득
+    repository.acquire_version_lock(db, training_job.model_id)
+
     next_version = repository.find_next_version(
         db,
         training_job.model_id
@@ -107,9 +110,10 @@ def create_model_version(db: Session, data: CreateModelVersionData) -> ModelVers
 
         return model_version
 
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise ModelVersionAlreadyExists(training_job.id)
+        print(exc.orig)
+        raise
 
 
     

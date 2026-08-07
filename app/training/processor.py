@@ -1,3 +1,6 @@
+import logging
+
+from dns.dnssecalgs import algorithms
 from sqlalchemy.orm import Session
 
 from app.domain.dataset_version import repository as dataset_version_repository
@@ -12,41 +15,80 @@ from app.domain.training_attempt import service as attempt_service
 from app.domain.training_attempt import repository as attempt_repository
 from app.domain.training_job.model import TrainingJob
 from app.domain.training_job.schema import CreateTrainingJobRequest
+from app.kafka.common import get_training_topic, CPU_TOPIC
+from app.kafka.producer import publish_training_job
 
 from app.training.completion_service import (
     complete_training_job,
     fail_training_job
 )
 from app.training.consts import ALGORITHMS_BY_TASK_TYPE, DEFAULT_CLASSIFICATION_SELECTION_METRIC, \
-    DEFAULT_REGRESSION_SELECTION_METRIC
+    DEFAULT_REGRESSION_SELECTION_METRIC, CURRENT_ALGORITHM_COUNT, CPU_ALGORITHM_COUNT
 from app.training.exceptions import NotValidTaskType
 from app.training.schema import (TrainingRequest, TrainingFailureResult,
-                                 TrainingResultResponse, TrainModelsResponse, Recommendation)
-
-from app.training.trainer import train
+                                 TrainingResultResponse, TrainModelsResponse, Recommendation,
+                                 TrainingModelAsyncResponse, TrainingModelSummaryInfo)
 
 from app.domain.model.enums import ModelTaskType
 from app.domain.training_job.enums import TrainingAlgorithm
 
+logger = logging.getLogger(__name__)
 
-def process_trainings_by_request(db: Session, request: TrainingRequest, member_id: int) -> TrainModelsResponse:
+def process_trainings_by_request(db: Session, request: TrainingRequest, member_id: int) -> TrainingModelAsyncResponse:
 
     algorithm_list = ALGORITHMS_BY_TASK_TYPE.get(request.task_type)
     if (algorithm_list is None) or (len(algorithm_list) == 0):
         raise NotValidTaskType("Task type not supported")
 
     # 이 함수로 들어오는 요청은 아직 trainig_job 객체 먼저 생성해야함
-
     training_jobs = list[TrainingJob]()
 
     for algorithm in algorithm_list:
-        training_jobs.append(training_job_service.create_training_job(db,
-            CreateTrainingJobRequest(
-                model_id=request.model_id, dataset_version_id=request.dataset_ver_id,
-                requested_by=member_id, base_model_version_id=request.base_model_version_id,
-                algorithm=algorithm, target_column=request.target_field,
-                training_config=request.training_config,
-            )))
+        try:
+            training_jobs.append(training_job_service.create_training_job(db,
+                CreateTrainingJobRequest(
+                    model_id=request.model_id, dataset_version_id=request.dataset_ver_id,
+                    requested_by=member_id, base_model_version_id=request.base_model_version_id,
+                    algorithm=algorithm, target_column=request.target_field,
+                    training_config=request.training_config,
+                )))
+
+        except Exception as exc:
+            raise
+
+    assert len(training_jobs) == CURRENT_ALGORITHM_COUNT, f"training_jobs count {len(training_jobs)} != CURRENT_ALGORITHM_COUNT"
+
+    # 카프카 produce
+    partition_no = 0
+
+    for training_job in training_jobs:
+        topic = get_training_topic(training_job.algorithm)
+
+        logger.info(f"topic: {topic}, training_job_id: {training_job.id}, algorithm: {training_job.algorithm}")
+
+        if topic == CPU_TOPIC:
+            partition_no = (partition_no + 1) % CPU_ALGORITHM_COUNT
+            publish_training_job(
+                topic=topic,
+                training_job_id=training_job.id, partition_no=partition_no)
+        else:
+            publish_training_job(
+                topic=topic,
+                training_job_id=training_job.id, partition_no=0)
+
+
+    return TrainingModelAsyncResponse(
+        training_jobs=[
+            TrainingModelSummaryInfo(
+                training_job_id=training_job.id,
+                algorithm=training_job.algorithm,
+                status=training_job.status,
+            )
+            for training_job in training_jobs
+        ]
+    )
+
+
 
     successes = list[TrainingResultResponse]()
     failures = list[TrainingFailureResult]()
@@ -84,12 +126,13 @@ def process_trainings_by_request(db: Session, request: TrainingRequest, member_i
 # 1. 트레이닝 재료 준비(trainig_attempt 객체 생성, training_job, dataset_version가져옴) + 상태 변경
 # 2. train
 # 3. 성공시 model_version, training_job_model_version 객체 생성함, 실패시 롤백
-def process_training_job(db: Session, training_job_id: int) -> TrainingResultResponse:
+def process_training_job(db: Session, training_job_id: int, train_func) -> TrainingResultResponse:
 
     attempt = attempt_service.create_attempt(db, training_job_id)
     attempt_service.mark_running(attempt)
 
-    # 함수 내부에서 commit함 (서비스 함수중 쓰기 함수는 기본적으로 함수 내부에서 커밋함)
+    # 함수 내부에서 commit됨 (서비스 함수중 쓰기 함수는 기본적으로 함수 내부에서 커밋함)
+    # attemp와 training_job state running 변경은 밑의 작업과는 별도로 저장되는 게 논리적으로 말이됨
     training_job = training_job_service.mark_training_job_running(db, training_job_id)
 
     attempt_id = attempt.id
@@ -105,7 +148,8 @@ def process_training_job(db: Session, training_job_id: int) -> TrainingResultRes
                 training_job.dataset_version_id
             )
 
-        training_result = train(training_job, dataset_version)
+        training_result = train_func(training_job, dataset_version)
+
 
         # model_verison, training_job_model_version 객체 생성, metrics는 model_version안으로 들어감
         model_version = complete_training_job(
@@ -120,6 +164,8 @@ def process_training_job(db: Session, training_job_id: int) -> TrainingResultRes
         )
 
         attempt_service.mark_succeeded(attempt)
+
+        # 여기서 complete_training_job에서 생성된 model_version, 관계객체 등과 함께 커밋
         db.commit()
 
         # 사용자에게 필요한 정보만 따로 뽑아서 리턴

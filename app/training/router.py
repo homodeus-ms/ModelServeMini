@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from starlette import status
 
 from app.db.session import get_db
 from app.training import processor
-from app.training.schema import TrainingRequest, TrainingResultResponse, TrainModelsResponse
+from app.training.schema import TrainingRequest, TrainingResultResponse, TrainModelsResponse, TrainingModelAsyncResponse
 
 router = APIRouter(
     prefix="/training-jobs",
@@ -16,7 +17,7 @@ def execute_training_job(training_job_id: int, db: Session = Depends(get_db)):
     return processor.process_training_job(db, training_job_id)
 
 
-@router.post("/execute", response_model=TrainModelsResponse)
+@router.post("/execute", response_model=TrainingModelAsyncResponse, status_code=status.HTTP_202_ACCEPTED)
 def execute_trainig_jobs(request: TrainingRequest, member_id:int, db: Session = Depends(get_db)):
 
     return processor.process_trainings_by_request(db, request, member_id)

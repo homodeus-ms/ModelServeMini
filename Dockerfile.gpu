@@ -1,0 +1,14 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# GPU Worker 전용 RAPIDS
+RUN pip install --no-cache-dir \
+    cudf-cu13==26.8.0 \
+    cuml-cu13==26.8.0
+
+COPY app ./app

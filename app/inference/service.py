@@ -5,6 +5,7 @@ import joblib
 import pandas as pd
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.domain.model_version import repository as model_version_repository
 from app.domain.model_version.exceptions import ModelVersionNotFound
 from app.domain.model_version import repository as model_version_repository
@@ -37,7 +38,8 @@ def predict(db: Session, model_version_id: int, request: InferenceRequest) -> In
     if model_version is None:
         raise ModelVersionNotFound(model_version_id)
 
-    artifact_path = Path(model_version.artifact_uri)
+    #artifact_path = Path(model_version.artifact_uri)
+    artifact_path = (Path(settings.model_storage_path) / model_version.artifact_uri)
 
     if not artifact_path.exists():
         raise ModelArtifactNotFound(model_version.artifact_uri)
@@ -49,7 +51,7 @@ def predict(db: Session, model_version_id: int, request: InferenceRequest) -> In
     ordered_input = _create_ordered_input(request.input, expected_columns)
 
     try:
-        estimator = joblib.load(artifact_path)
+        artifact = joblib.load(artifact_path)
 
     except Exception:
         raise ModelArtifactLoadFailed(model_version.artifact_uri)
@@ -58,15 +60,16 @@ def predict(db: Session, model_version_id: int, request: InferenceRequest) -> In
     dataframe = pd.DataFrame([ordered_input], columns=expected_columns)
 
     try:
-        predictions = estimator.predict(dataframe)
+        pipeline = artifact.get("pipeline")
+        predictions = pipeline.predict(dataframe)
         prediction = _to_python_value(predictions[0])
 
         probabilities: dict[str, float] | None = None
 
         # RandomForestClassifier인 경우
-        if hasattr(estimator, "predict_proba"):
-            probability_result = estimator.predict_proba(dataframe)[0]
-            class_labels = estimator.classes_
+        if hasattr(pipeline, "predict_proba"):
+            probability_result = pipeline.predict_proba(dataframe)[0]
+            class_labels = pipeline.classes_
 
             probabilities = {
                 str(class_label): float(probability)

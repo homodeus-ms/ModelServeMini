@@ -1,4 +1,4 @@
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.domain.model_version.enums import DeploymentStatus
@@ -49,6 +49,9 @@ def find_all_by_model_id(db: Session, model_id: int) -> list[ModelVersion]:
 
     return list(db.scalars(stmt).all())
 
+def acquire_version_lock(db: Session, model_id: int) -> None:
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:lock_key)"),{"lock_key": model_id})
 
 def find_next_version(db: Session, model_id: int) -> int:
     stmt = select(

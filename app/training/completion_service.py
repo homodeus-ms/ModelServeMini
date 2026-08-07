@@ -39,26 +39,17 @@ def complete_training_job(
         feature_columns=feature_columns,
     )
 
-    try:
-        model_version = model_version_service.create_model_version(db, data)
+    model_version = model_version_service.create_model_version(db, data)
 
-        relation_service.create_result_relation(
-            db,
-            training_job_id,
-            model_version.id
-        )
+    relation_service.create_result_relation(
+        db,
+        training_job_id,
+        model_version.id
+    )
 
-        transitions.mark_succeeded(training_job, metrics)
+    transitions.mark_succeeded(training_job, metrics)
 
-        db.commit()
-        db.refresh(model_version)
-        db.refresh(training_job)
-
-        return model_version
-
-    except Exception:
-        db.rollback()
-        raise
+    return model_version
 
 
 def fail_training_job(db: Session, training_job_id: int, failure_message: str) -> None:

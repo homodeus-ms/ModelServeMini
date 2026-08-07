@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str
-    dataset_storage_path: str
+    dataset_storage_path: str = "storage/datasets"
+    model_storage_path: str = "storage/models"
 
 settings = Settings()

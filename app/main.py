@@ -11,6 +11,7 @@ from app.domain.model_version.router import router as model_version_router
 from app.training.router import router as training_router
 from app.inference.router import router as inference_router
 
+import app.core.logging
 
 app = FastAPI()
 
