@@ -17,6 +17,7 @@ def complete_training_job(
     metrics: dict,
     input_schema: dict | None,
     feature_columns: list[str],
+    feature_importances: list[dict] | None,
 ) -> ModelVersion:
 
     # model_version 객체와 training_job_model_version 관계 객체 생성함
@@ -37,6 +38,7 @@ def complete_training_job(
         metrics=metrics,
         input_schema=input_schema,
         feature_columns=feature_columns,
+        feature_importances=feature_importances,
     )
 
     model_version = model_version_service.create_model_version(db, data)
@@ -68,8 +70,5 @@ def fail_training_job(db: Session, training_job_id: int, failure_message: str) -
             failure_message
         )
 
-        db.commit()
-
     except Exception:
-        db.rollback()
         raise

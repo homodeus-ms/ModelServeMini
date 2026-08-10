@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: gpu-worker
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: gpu-worker
+
+  template:
+    metadata:
+      labels:
+        app: gpu-worker
+
+    spec:
+      runtimeClassName: nvidia
+
+      containers:
+        - name: gpu-worker
+          image: modelservemini-gpu-worker:latest
+          imagePullPolicy: Never
+
+          command:
+            - python
+
+          args:
+            - -m
+            - app.kafka.gpu_consumer
+
+          env:
+
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:29092"
+
+            - name: KAFKA_TOPIC
+              value: "training-jobs-gpu"
+
+            - name: KAFKA_GROUP_ID
+              value: "gpu-training-workers"
+
+            - name: WORKER_DEVICE
+              value: "cuda"
+
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+            - name: DATASET_STORAGE_PATH
+              value: "/app/storage/datasets"
+
+            - name: MODEL_STORAGE_PATH
+              value: "/app/storage"
+
+            - name: REDIS_HOST
+              value: "redis"
+
+            - name: REDIS_PORT
+              value: "6379"
+
+            - name: GPU_SCHEDULER_URL
+              value: "http://gpu-scheduler:8010"
+
+
+          volumeMounts:
+            - name: storage
+              mountPath: /app/storage
+
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+
+      volumes:
+        - name: storage
+          hostPath:
+            path: /mnt/c/dev/ModelServeMini/storage
+            type: Directory

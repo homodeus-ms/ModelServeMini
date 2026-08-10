@@ -1,160 +1,65 @@
-from pathlib import Path
-from typing import Any
-
-import joblib
-import pandas as pd
+import logging
+import time
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
-from app.domain.model_version import repository as model_version_repository
 from app.domain.model_version.exceptions import ModelVersionNotFound
-from app.domain.model_version import repository as model_version_repository
-from app.inference.exceptions import (
-    InferenceFailed,
-    InvalidInferenceInput,
-    ModelArtifactLoadFailed,
-    ModelArtifactNotFound,
-    NonNumericInferenceInput, InvalidInferenceInputValue, DeployVersionNotFound
-)
-
+from app.domain.model_version.mapper import model_version_to_cache_dto
+from app.domain.model_version.model import ModelVersion
+from app.domain.model_version.schema import ModelVersionCache
+from app.domain.training_job.enums import TrainingAlgorithm
+from app.inference.exceptions import DeployVersionNotFound
 from app.inference.schema import InferenceRequest, InferenceResponse
+from app.domain.model_version import repository as model_version_repository
+from app.inference.cpu import service as cpu_service
+from app.inference.gpu import client as gpu_client
+from app.redis.cache import get_deployed_model_version_redis, set_deployed_model_version_redis
 
+GPU_ALGORITHMS = {
+    TrainingAlgorithm.XGBOOST_CLASSIFIER_GPU.value,
+    TrainingAlgorithm.XGBOOST_REGRESSOR_GPU.value,
+}
+
+logger = logging.getLogger(__name__)
+
+# 현재 Deploy Version에 의한 추론 (redis 사용)
 def predict_by_model(db: Session, model_id, request: InferenceRequest) -> InferenceResponse:
-    deploy_version = model_version_repository.find_deploy_version_by_id(db, model_id)
-    if deploy_version is None:
-        raise DeployVersionNotFound(model_id)
 
-    return predict(db, deploy_version.id, request)
+    started_at = time.perf_counter()
 
+    try:
+        cached = get_deployed_model_version_redis(model_id)
+        if cached is not None:
+            return _call_service(db, cached, request)
 
+        deploy_version = model_version_repository.find_deploy_version_by_id(db, model_id)
+        if deploy_version is None:
+            raise DeployVersionNotFound(model_id)
+
+        to_cached = model_version_to_cache_dto(deploy_version)
+
+        set_deployed_model_version_redis(model_id, to_cached)
+
+        return _call_service(db, to_cached, request)
+
+    finally:
+        elapsed_ms = (time.perf_counter() - started_at) * 1000
+        logger.info(f"inference completed. {model_id}'s latency is {elapsed_ms} ms")
+
+# 사용자가 직접 model_version을 지정해서 추론
 def predict_by_model_version(db: Session, model_version_id: int,
                              request: InferenceRequest) -> InferenceResponse:
-    return predict(db, model_version_id, request)
-
-def predict(db: Session, model_version_id: int, request: InferenceRequest) -> InferenceResponse:
 
     model_version = model_version_repository.find_by_id(db, model_version_id)
-
     if model_version is None:
         raise ModelVersionNotFound(model_version_id)
+    model_version_cache = model_version_to_cache_dto(model_version)
 
-    #artifact_path = Path(model_version.artifact_uri)
-    artifact_path = (Path(settings.model_storage_path) / model_version.artifact_uri)
-
-    if not artifact_path.exists():
-        raise ModelArtifactNotFound(model_version.artifact_uri)
-
-    expected_columns = _get_expected_columns(model_version.input_schema)
-
-    _validate_input_columns(request.input, expected_columns)
-
-    ordered_input = _create_ordered_input(request.input, expected_columns)
-
-    try:
-        artifact = joblib.load(artifact_path)
-
-    except Exception:
-        raise ModelArtifactLoadFailed(model_version.artifact_uri)
-
-    # 1건
-    dataframe = pd.DataFrame([ordered_input], columns=expected_columns)
-
-    try:
-        pipeline = artifact.get("pipeline")
-        predictions = pipeline.predict(dataframe)
-        prediction = _to_python_value(predictions[0])
-
-        probabilities: dict[str, float] | None = None
-
-        # RandomForestClassifier인 경우
-        if hasattr(pipeline, "predict_proba"):
-            probability_result = pipeline.predict_proba(dataframe)[0]
-            class_labels = pipeline.classes_
-
-            probabilities = {
-                str(class_label): float(probability)
-                for class_label, probability in zip(class_labels, probability_result)
-            }
-
-    except Exception as exc:
-        raise InferenceFailed(str(exc))
-
-    return InferenceResponse(
-        model_version_id=model_version.id,
-        prediction=prediction,
-        probabilities=probabilities
-    )
+    return _call_service(db, model_version_cache, request)
 
 
-def _get_expected_columns(input_schema: dict[str, Any] | None) -> list[str]:
+def _call_service(db: Session, model_version_cache: ModelVersionCache, request: InferenceRequest) -> InferenceResponse:
 
-    if input_schema is None:
-        raise InvalidInferenceInput()
+    if model_version_cache.algorithm in GPU_ALGORITHMS:
+        return gpu_client.predict(model_version_cache.id, request)
 
-    columns = input_schema.get("columns")
-
-    if not isinstance(columns, list):
-        raise InvalidInferenceInput()
-
-    expected_columns: list[str] = []
-
-    for column in columns:
-        if not isinstance(column, dict):
-            raise InvalidInferenceInput()
-
-        name = column.get("name")
-
-        if not isinstance(name, str):
-            raise InvalidInferenceInput()
-
-        expected_columns.append(name)
-
-    return expected_columns
-
-
-def _validate_input_columns(
-    input_data: dict[str, Any],
-    expected_columns: list[str]
-) -> None:
-    input_columns = set(input_data.keys())
-    expected_column_set = set(expected_columns)
-
-    missing_columns = sorted(
-        expected_column_set - input_columns
-    )
-
-    extra_columns = sorted(
-        input_columns - expected_column_set
-    )
-
-    if missing_columns or extra_columns:
-        raise InvalidInferenceInput(
-            missing_columns,
-            extra_columns
-        )
-
-
-def _create_ordered_input(input_data: dict[str, Any], expected_columns: list[str]) -> dict[str, int | float]:
-
-    ordered_input: dict[str, Any] = {}
-
-    for column in expected_columns:
-
-        value = input_data[column]
-
-        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
-            raise InvalidInferenceInputValue(
-                column=column,
-                value_type=type(value).__name__
-            )
-
-        ordered_input[column] = value
-
-    return ordered_input
-
-
-def _to_python_value(value: Any) -> Any:
-    if hasattr(value, "item"):
-        return value.item()
-
-    return value
+    return cpu_service.predict(db, model_version_cache, request)

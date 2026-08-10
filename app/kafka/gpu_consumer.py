@@ -1,8 +1,11 @@
 import logging
 import os
 import app.core.logging
+import app.db.models
 
 from app.db.session import SessionLocal
+from app.gpu_scheduler.client import acquire_gpu, release_gpu
+from app.gpu_scheduler.schema import GpuTaskType
 from app.kafka.consumer import run_training_consumer
 from app.training import processor, gpu_trainer
 
@@ -10,19 +13,34 @@ from app.training import processor, gpu_trainer
 logger = logging.getLogger(__name__)
 
 def process_gpu_training_job(training_job_id: int) -> None:
+
     db = SessionLocal()
-    logger.info(f"start job no: {training_job_id}")
+    task_id = f"training-{training_job_id}"
+    gpu_acquired = False
 
     try:
+        logger.info("requested GPU: task_id=%s", task_id)
+        acquire_gpu(task_id=task_id, task_type=GpuTaskType.TRAINING)
+        gpu_acquired = True
+        logger.info("GPU acquired: task_id=%s", task_id)
+
         processor.process_training_job(db, training_job_id, gpu_trainer.train)
-        logger.info(f"{training_job_id} is done by GPU Worker")
+        logger.info("%s is done by GPU Worker", training_job_id)
 
     except Exception as e:
         logger.exception(e)
         raise
 
     finally:
+        if gpu_acquired:
+            try:
+                release_gpu(task_id)
+                logger.info("GPU released: task_id=%s", task_id)
+            except Exception:
+                logger.exception("failed to release GPU: task_id=%s", task_id)
+
         db.close()
+
 
 def main() -> None:
     run_training_consumer(

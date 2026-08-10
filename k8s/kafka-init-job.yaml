@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-init
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+
+      containers:
+        - name: kafka-init
+          image: apache/kafka:4.1.0
+
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for Kafka..."
+
+              until /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:29092 \
+                --list > /dev/null 2>&1
+              do
+                echo "Kafka is not ready yet..."
+                sleep 2
+              done
+
+              echo "Creating CPU topic..."
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:29092 \
+                --create \
+                --if-not-exists \
+                --topic training-jobs-cpu \
+                --partitions 3 \
+                --replication-factor 1
+
+              echo "Creating GPU topic..."
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:29092 \
+                --create \
+                --if-not-exists \
+                --topic training-jobs-gpu \
+                --partitions 1 \
+                --replication-factor 1
+
+              echo "Creating Completion topic..."
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:29092 \
+                --create \
+                --if-not-exists \
+                --topic training-job-completed \
+                --partitions 1 \
+                --replication-factor 1
+
+              echo "Kafka topics initialized."

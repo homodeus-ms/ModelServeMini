@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.inference import service
+from app.inference.model_cache import clear_model_artifact
 from app.inference.schema import (
     InferenceRequest,
     InferenceResponse

@@ -7,6 +7,8 @@ from cuml.preprocessing import LabelEncoder
 from cuml.model_selection import train_test_split
 
 from app.training.artifact_storage import save_artifact
+from app.training.consts import TASK_TYPE_BY_ALGORITHM
+from app.training.exceptions import NotValidTaskType
 from app.training_pipeline.gpu_importance import gpu_calculate_feature_importance
 from app.training_pipeline.gpu_validation import validate_gpu_features
 from app.training_pipeline.metrics import calculate_metrics
@@ -31,6 +33,10 @@ def train(training_job: TrainingJob, dataset_ver: DatasetVersion) -> TrainingRes
 
     # Vram에 읽기
     dataframe = cudf.read_csv(dataset_path)
+
+    # TEMP : 벤치마크 테스트용
+    dataframe = cudf.concat([dataframe] * 3000, ignore_index=True)
+    logger.info("benchmark dataframe rows=%s",len(dataframe))
 
     validate_dataframe(dataframe, training_job.target_column)
 
@@ -77,10 +83,13 @@ def train(training_job: TrainingJob, dataset_ver: DatasetVersion) -> TrainingRes
 
     metrics = calculate_metrics(algorithm, cp.asnumpy(y_test), cp.asnumpy(predictions))
 
+    task_type = TASK_TYPE_BY_ALGORITHM.get(algorithm)
+    if task_type is None:
+        raise NotValidTaskType("Algorithm not supported")
     feature_importances = gpu_calculate_feature_importance(pipeline, x_test, y_test, metrics)
 
     # artifact 저장 (GPU 파이프라인 그대로 저장함)
-    artifact = {"pipeline": pipeline, "target_encoder": target_encoder}
+    artifact = {"pipeline": pipeline, "target_encoder": target_encoder, "task_type": task_type.value}
     artifact_uri, artifact_size, artifact_checksum = save_artifact(artifact, training_job.model_id)
 
     result = TrainingResult(
@@ -92,7 +101,5 @@ def train(training_job: TrainingJob, dataset_ver: DatasetVersion) -> TrainingRes
         feature_columns=list(features.columns),
         feature_importances=feature_importances,
     )
-
-    logger.info(result)
 
     return result

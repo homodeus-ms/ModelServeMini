@@ -38,8 +38,8 @@ def create_estimator(algorithm: TrainingAlgorithm, config: dict[str, Any]):
             )
         case TrainingAlgorithm.XGBOOST_CLASSIFIER_GPU:
             return XGBClassifier(
-                n_estimators=300,
-                max_depth=8,
+                n_estimators=1000,
+                max_depth=10,
                 learning_rate=0.1,
                 tree_method="hist",
                 device="cuda",

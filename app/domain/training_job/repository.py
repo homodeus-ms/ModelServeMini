@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,6 +39,10 @@ def find_all(
 
     return list(db.scalars(stmt).all())
 
+def find_all_by_batch_id(db: Session, training_batch_id: UUID) -> list[TrainingJob]:
+
+    stmt = select(TrainingJob).where(TrainingJob.training_batch_id == training_batch_id)
+    return list(db.scalars(stmt).all())
 
 def save(db: Session, training_job: TrainingJob) -> TrainingJob:
     db.add(training_job)

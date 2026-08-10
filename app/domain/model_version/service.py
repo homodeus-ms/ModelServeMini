@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -10,14 +12,19 @@ from app.domain.model_version.exceptions import (
     ModelVersionAlreadyExists,
     ModelVersionNotFound
 )
+from app.domain.model_version.mapper import model_version_to_cache_dto
 from app.domain.model_version.model import ModelVersion
-from app.domain.model_version.schema import CreateModelVersionData
+from app.domain.model_version.schema import CreateModelVersionData, ModelVersionCache
 from app.domain.training_job import repository as training_job_repository
 from app.domain.training_job.enums import TrainingJobStatus
 from app.domain.training_job.exceptions import (
     InvalidTrainingJobState,
     TrainingJobNotFound
 )
+from app.redis.cache import set_deployed_model_version_redis
+
+logger = logging.getLogger(__name__)
+
 
 def get_model_version(db: Session, model_version_id: int) -> ModelVersion:
     return _get_model_version_or_throw(db, model_version_id)
@@ -31,6 +38,8 @@ def get_model_versions(db: Session, model_id: int) -> list[ModelVersion]:
 
     return repository.find_all_by_model_id(db, model_id)
 
+
+
 def deploy_model_version(db: Session, model_version_id: int) -> ModelVersion:
 
     try:
@@ -40,18 +49,23 @@ def deploy_model_version(db: Session, model_version_id: int) -> ModelVersion:
             raise ModelVersionNotFound(model_version_id)
 
         prev_deployed_version = repository.find_deploy_version_by_id(db, model_version.model_id)
-
-        model_version.deployment_status = DeploymentStatus.PRODUCTION.value
+        
         if prev_deployed_version is not None:
             prev_deployed_version.deployment_status = DeploymentStatus.ARCHIVED.value
+            db.flush()
+
+        model_version.deployment_status = DeploymentStatus.PRODUCTION.value
 
         db.commit()
-
-        return model_version
 
     except:
         db.rollback()
         raise
+
+    _cache_deployed_version_to_redis(model_version)
+
+    return model_version
+
 
 def create_model_version(db: Session, data: CreateModelVersionData) -> ModelVersion:
     training_job = training_job_repository.find_by_id(db, data.training_job_id)
@@ -102,6 +116,7 @@ def create_model_version(db: Session, data: CreateModelVersionData) -> ModelVers
         metrics=data.metrics,
         input_schema=data.input_schema,
         feature_columns=data.feature_columns,
+        feature_importances=data.feature_importances,
         deployment_status=DeploymentStatus.NONE.value,
     )
 
@@ -124,3 +139,12 @@ def _get_model_version_or_throw(db: Session, model_version_id: int) -> ModelVers
         raise ModelVersionNotFound(model_version_id)
 
     return model_version
+
+def _cache_deployed_version_to_redis(model_version: ModelVersion):
+    try:
+        cached = model_version_to_cache_dto(model_version)
+        set_deployed_model_version_redis(model_version.model_id,cached)
+
+    except Exception:
+        logger.exception("Failed to update deployed model cache: " "model_id=%s, model_version_id=%s",
+            model_version.model_id, model_version.id)

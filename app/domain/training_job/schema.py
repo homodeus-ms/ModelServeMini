@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -31,6 +32,7 @@ class TrainingJobResponse(BaseModel):
     model_id: int
     dataset_version_id: int
     requested_by: int
+    training_batch_id: UUID
 
     algorithm: TrainingAlgorithm
     target_column: str

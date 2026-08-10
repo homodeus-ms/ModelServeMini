@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: cpu-worker
+
+spec:
+  replicas: 3
+
+  selector:
+    matchLabels:
+      app: cpu-worker
+
+  template:
+    metadata:
+      labels:
+        app: cpu-worker
+
+    spec:
+      containers:
+        - name: cpu-worker
+          image: modelservemini-cpu-worker:latest
+          imagePullPolicy: Never
+
+          command:
+            - python
+
+          args:
+            - -m
+            - app.kafka.cpu_consumer
+
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:29092"
+
+            - name: KAFKA_TOPIC
+              value: "training-jobs-cpu"
+
+            - name: KAFKA_GROUP_ID
+              value: "cpu-training-workers"
+
+            - name: WORKER_DEVICE
+              value: "cpu"
+
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+            - name: DATASET_STORAGE_PATH
+              value: "/app/storage/datasets"
+
+            - name: MODEL_STORAGE_PATH
+              value: "/app/storage"
+
+            - name: REDIS_HOST
+              value: "redis"
+
+            - name: REDIS_PORT
+              value: "6379"
+
+          volumeMounts:
+            - name: storage
+              mountPath: /app/storage
+
+      volumes:
+        - name: storage
+          hostPath:
+            path: /mnt/c/dev/ModelServeMini/storage
+            type: Directory

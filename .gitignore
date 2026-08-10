@@ -18,3 +18,12 @@ wheels/
 
 test-data/
 storage/
+
+# Docker images
+*.tar
+
+# Model artifacts
+*.joblib
+*.pkl
+*.pt
+*.pth

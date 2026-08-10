@@ -4,17 +4,17 @@ from starlette import status
 
 from app.db.session import get_db
 from app.training import processor
-from app.training.schema import TrainingRequest, TrainingResultResponse, TrainModelsResponse, TrainingModelAsyncResponse
+from app.training.schema import TrainingRequest, TrainingResultResponse, TrainModelsResponse, \
+    TrainingModelAsyncResponse, TrainingModelSummaryInfo
 
 router = APIRouter(
     prefix="/training-jobs",
     tags=["Training Jobs"]
 )
 
-@router.post("/{training_job_id}/execute", response_model=TrainingResultResponse)
+@router.post("/{training_job_id}/execute", response_model=TrainingModelSummaryInfo)
 def execute_training_job(training_job_id: int, db: Session = Depends(get_db)):
-
-    return processor.process_training_job(db, training_job_id)
+    return processor.execute_training_job_by_id(db, training_job_id)
 
 
 @router.post("/execute", response_model=TrainingModelAsyncResponse, status_code=status.HTTP_202_ACCEPTED)

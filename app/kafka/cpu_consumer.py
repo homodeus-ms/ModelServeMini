@@ -1,6 +1,7 @@
 import logging
 import os
 import app.core.logging
+import app.db.models
 
 from app.db.session import SessionLocal
 from app.kafka.consumer import run_training_consumer

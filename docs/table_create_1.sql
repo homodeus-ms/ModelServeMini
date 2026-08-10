@@ -175,6 +175,8 @@ CREATE TABLE models (
 CREATE TABLE training_jobs (
     id BIGSERIAL PRIMARY KEY,
 
+    training_batch_id UUID NOT NULL,
+
     model_id BIGINT NOT NULL,
     dataset_version_id BIGINT NOT NULL,
     requested_by BIGINT NOT NULL,
@@ -183,6 +185,8 @@ CREATE TABLE training_jobs (
     target_column VARCHAR(200) NOT NULL,
 
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
+
+    completion_counted BOOLEAN NOT NULL DEFAULT FALSE,
 
     training_config JSONB NOT NULL DEFAULT '{}'::jsonb,
     metrics JSONB,
@@ -195,6 +199,11 @@ CREATE TABLE training_jobs (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_training_jobs_training_batch
+        FOREIGN KEY (training_batch_id)
+        REFERENCES training_batches(id)
+        ON DELETE RESTRICT,
 
     CONSTRAINT fk_training_jobs_model
         FOREIGN KEY (model_id)
@@ -212,24 +221,30 @@ CREATE TABLE training_jobs (
         ON DELETE RESTRICT,
 
     CONSTRAINT ck_training_jobs_status
-        CHECK (status IN (
-            'PENDING',
-            'RUNNING',
-            'SUCCEEDED',
-            'FAILED',
-            'CANCELLED'
-        )),
+        CHECK (
+            status IN (
+                'PENDING',
+                'RUNNING',
+                'SUCCEEDED',
+                'FAILED',
+                'CANCELLED'
+            )
+        ),
 
     CONSTRAINT ck_training_jobs_algorithm
-        CHECK (algorithm IN (
-            'LOGISTIC_REGRESSION',
-            'RANDOM_FOREST_CLASSIFIER',
-            'LINEAR_REGRESSION',
-            'RANDOM_FOREST_REGRESSOR'
-        )),
+        CHECK (
+            algorithm IN (
+                'LOGISTIC_REGRESSION',
+                'RANDOM_FOREST_CLASSIFIER',
+                'LINEAR_REGRESSION',
+                'RANDOM_FOREST_REGRESSOR'
+            )
+        ),
 
     CONSTRAINT ck_training_jobs_target_column_not_blank
-        CHECK (BTRIM(target_column) <> ''),
+        CHECK (
+            BTRIM(target_column) <> ''
+        ),
 
     CONSTRAINT ck_training_jobs_started_at
         CHECK (
@@ -253,6 +268,11 @@ CREATE TABLE training_jobs (
         )
 );
 
+CREATE INDEX ix_training_jobs_training_batch_id
+ON training_jobs(training_batch_id);
+
+CREATE INDEX ix_training_jobs_status
+ON training_jobs(status);
 
 -- ============================================================
 -- 6. model_versions
@@ -459,3 +479,80 @@ CREATE INDEX ix_training_attempts_status_started_at
 
 CREATE INDEX ix_training_attempts_training_job_id
     ON training_attempts(training_job_id);
+
+
+
+
+
+CREATE TABLE training_batches (
+    id UUID PRIMARY KEY,
+
+    requested_by BIGINT NOT NULL,
+    dataset_version_id BIGINT NOT NULL,
+
+    target_column VARCHAR(255) NOT NULL,
+    task_type VARCHAR(50) NOT NULL,
+
+    status VARCHAR(30) NOT NULL,
+
+    total_jobs INTEGER NOT NULL,
+    completed_jobs INTEGER NOT NULL DEFAULT 0,
+
+    recommendation JSONB NULL,
+
+    completed_at TIMESTAMP WITH TIME ZONE NULL,
+
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_training_batches_requested_by
+        FOREIGN KEY (requested_by)
+        REFERENCES members(id),
+
+    CONSTRAINT fk_training_batches_dataset_version
+        FOREIGN KEY (dataset_version_id)
+        REFERENCES dataset_versions(id),
+
+    CONSTRAINT ck_training_batches_job_count
+        CHECK (
+            total_jobs > 0
+            AND completed_jobs >= 0
+            AND completed_jobs <= total_jobs
+        ),
+
+    CONSTRAINT ck_training_batches_status
+        CHECK (
+            status IN (
+                'PENDING',
+                'RUNNING',
+                'SUCCEEDED',
+                'FAILED',
+                'CANCELLED'
+            )
+        ),
+
+    CONSTRAINT ck_training_batches_task_type
+        CHECK (
+            task_type IN (
+                'CLASSIFICATION',
+                'REGRESSION'
+            )
+        )
+);
+
+
+-- training_jobs 에 칼럼 추가
+ALTER TABLE training_jobs
+ADD COLUMN training_batch_id UUID NOT NULL;
+ALTER TABLE training_jobs
+ADD COLUMN completion_counted BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- FK 연결
+ALTER TABLE training_jobs
+ADD CONSTRAINT fk_training_jobs_training_batch
+FOREIGN KEY (training_batch_id)
+REFERENCES training_batches(id);
+
+
+CREATE INDEX idx_training_jobs_training_batch_id
+ON training_jobs(training_batch_id);

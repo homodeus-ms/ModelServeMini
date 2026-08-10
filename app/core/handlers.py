@@ -1,10 +1,15 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.core.exceptions import AppException
 
+logger = logging.getLogger(__name__)
 
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+    logger.exception(exc)
+
     return JSONResponse(
         status_code=exc.status_code,
         content={

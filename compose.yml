@@ -20,148 +20,217 @@ services:
       timeout: 5s
       retries: 5
 
-  kafka:
-    image: apache/kafka:4.1.0
-    container_name: model-serve-mini-kafka
-    ports:
-      - "9092:9092"
+#  kafka:
+#    image: apache/kafka:4.1.0
+#    container_name: model-serve-mini-kafka
+#    ports:
+#      - "9092:9092"
+#
+#    environment:
+#      KAFKA_NODE_ID: 1
+#      KAFKA_PROCESS_ROLES: broker,controller
+#
+#      # Docker 밖과 Docker 안에서 서로 다른 리스너 사용
+#      KAFKA_LISTENERS: >
+#        EXTERNAL_WINDOWS://:9092,
+#        EXTERNAL_K3S://:9094,
+#        INTERNAL://:29092,
+#        CONTROLLER://:9093
+#
+#      KAFKA_ADVERTISED_LISTENERS: >
+#        EXTERNAL_WINDOWS://localhost:9092,
+#        EXTERNAL_K3S://10.255.255.254:9094,
+#        INTERNAL://kafka:29092
+#
+#      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >
+#        EXTERNAL_WINDOWS:PLAINTEXT,
+#        EXTERNAL_K3S:PLAINTEXT,
+#        INTERNAL:PLAINTEXT,
+#        CONTROLLER:PLAINTEXT
+#
+#      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+#      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+#
+#      KAFKA_CONTROLLER_QUORUM_VOTERS: >
+#        1@kafka:9093
+#
+#      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+#
+#  kafka-ui:
+#    image: provectuslabs/kafka-ui
+#    container_name: kafka-ui
+#    ports:
+#      - "8081:8080"
+#
+#    environment:
+#      KAFKA_CLUSTERS_0_NAME: local
+#      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+#
+#    depends_on:
+#      - kafka
+#
+#  kafka-init:
+#    image: apache/kafka:4.1.0
+#
+#    depends_on:
+#      kafka:
+#        condition: service_started
+#
+#    entrypoint: [ "/bin/bash", "-c" ]
+#
+#    command:
+#      - |
+#        echo "Waiting for Kafka..."
+#
+#        until /opt/kafka/bin/kafka-topics.sh \
+#          --bootstrap-server kafka:29092 \
+#          --list > /dev/null 2>&1
+#        do
+#          echo "Kafka is not ready yet..."
+#          sleep 2
+#        done
+#
+#        echo "Creating CPU topic..."
+#
+#        /opt/kafka/bin/kafka-topics.sh \
+#          --bootstrap-server kafka:29092 \
+#          --create \
+#          --if-not-exists \
+#          --topic training-jobs-cpu \
+#          --partitions 3 \
+#          --replication-factor 1
+#
+#        echo "Creating GPU topic..."
+#
+#        /opt/kafka/bin/kafka-topics.sh \
+#          --bootstrap-server kafka:29092 \
+#          --create \
+#          --if-not-exists \
+#          --topic training-jobs-gpu \
+#          --partitions 1 \
+#          --replication-factor 1
+#
+#        echo "Creating Completion topic..."
+#
+#        /opt/kafka/bin/kafka-topics.sh \
+#          --bootstrap-server kafka:29092 \
+#          --create \
+#          --if-not-exists \
+#          --topic training-job-completed \
+#          --partitions 1 \
+#          --replication-factor 1
+#
+#        echo "Kafka topics initialized."
 
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
+#  redis:
+#    image: redis:8
+#    container_name: model-serve-mini-redis
+#    ports:
+#      - "6379:6379"
 
-      # Docker 밖과 Docker 안에서 서로 다른 리스너 사용
-      KAFKA_LISTENERS: >
-        EXTERNAL://:9092,
-        INTERNAL://:29092,
-        CONTROLLER://:9093
+#  cpu-worker:
+#    build: .
+#    command: python -m app.kafka.cpu_consumer
+#
+#    environment:
+#      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+#      KAFKA_TOPIC: training-jobs-cpu
+#      KAFKA_GROUP_ID: cpu-training-workers
+#      WORKER_DEVICE: cpu
+#      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/model_serve_mini
+#      DATASET_STORAGE_PATH: /app/storage/datasets
+#      MODEL_STORAGE_PATH: /app/storage
+#    volumes:
+#      - ./storage:/app/storage
+#      - ./app:/app/app
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#      kafka:
+#        condition: service_started
+#      kafka-init:
+#        condition: service_completed_successfully
+#
+#  gpu-worker:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.gpu
+#
+#    command: python -m app.kafka.gpu_consumer
+#
+#    environment:
+#      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+#      KAFKA_TOPIC: training-jobs-gpu
+#      KAFKA_GROUP_ID: gpu-training-workers
+#      WORKER_DEVICE: cuda
+#      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/model_serve_mini
+#      DATASET_STORAGE_PATH: /app/storage/datasets
+#      MODEL_STORAGE_PATH: /app/storage
+#
+#    volumes:
+#      - ./app:/app/app
+#      - ./storage:/app/storage
+#
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#      kafka:
+#        condition: service_started
+#      kafka-init:
+#        condition: service_completed_successfully
+#
+#    gpus: all
+#
+#  gpu-inference:
+#    build:
+#      context: .
+#      dockerfile: Dockerfile.gpu
+#
+#    command: uvicorn app.inference.gpu.main:app --host 0.0.0.0 --port 8001
+#
+#    environment:
+#      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/model_serve_mini
+#      MODEL_STORAGE_PATH: /app/storage
+#
+#    volumes:
+#      - ./storage:/app/storage
+#      - ./app:/app/app
+#
+#    ports:
+#      - "8001:8001"
+#
+#    gpus: all
+#
+#    depends_on:
+#      db:
+#        condition: service_healthy
 
-      # 클라이언트에게 알려줄 실제 접속 주소
-      KAFKA_ADVERTISED_LISTENERS: >
-        EXTERNAL://localhost:9092,
-        INTERNAL://kafka:29092
-
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: >
-        EXTERNAL:PLAINTEXT,
-        INTERNAL:PLAINTEXT,
-        CONTROLLER:PLAINTEXT
-
-      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-
-      KAFKA_CONTROLLER_QUORUM_VOTERS: >
-        1@kafka:9093
-
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-
-  kafka-ui:
-    image: provectuslabs/kafka-ui
-    container_name: kafka-ui
-    ports:
-      - "8081:8080"
-
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-
-    depends_on:
-      - kafka
-
-  kafka-init:
-    image: apache/kafka:4.1.0
-
-    depends_on:
-      kafka:
-        condition: service_started
-
-    entrypoint: [ "/bin/bash", "-c" ]
-
-    command:
-      - |
-        echo "Waiting for Kafka..."
-        
-        until /opt/kafka/bin/kafka-topics.sh \
-          --bootstrap-server kafka:29092 \
-          --list > /dev/null 2>&1
-        do
-          echo "Kafka is not ready yet..."
-          sleep 2
-        done
-        
-        echo "Creating CPU topic..."
-        
-        /opt/kafka/bin/kafka-topics.sh \
-          --bootstrap-server kafka:29092 \
-          --create \
-          --if-not-exists \
-          --topic training-jobs-cpu \
-          --partitions 3 \
-          --replication-factor 1
-        
-        echo "Creating GPU topic..."
-        
-        /opt/kafka/bin/kafka-topics.sh \
-          --bootstrap-server kafka:29092 \
-          --create \
-          --if-not-exists \
-          --topic training-jobs-gpu \
-          --partitions 1 \
-          --replication-factor 1
-        
-        echo "Kafka topics initialized."
-
-  cpu-worker:
-    build: .
-    command: python -m app.kafka.cpu_consumer
-
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_TOPIC: training-jobs-cpu
-      KAFKA_GROUP_ID: cpu-training-workers
-      WORKER_DEVICE: cpu
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/model_serve_mini
-      DATASET_STORAGE_PATH: /app/storage/datasets
-      MODEL_STORAGE_PATH: /app/storage
-    volumes:
-      - ./storage:/app/storage
-      - ./app:/app/app
-    depends_on:
-      db:
-        condition: service_healthy
-      kafka:
-        condition: service_started
-      kafka-init:
-        condition: service_completed_successfully
-
-  gpu-worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.gpu
-
-    command: python -m app.kafka.gpu_consumer
-
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_TOPIC: training-jobs-gpu
-      KAFKA_GROUP_ID: gpu-training-workers
-      WORKER_DEVICE: cuda
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/model_serve_mini
-      DATASET_STORAGE_PATH: /app/storage/datasets
-      MODEL_STORAGE_PATH: /app/storage
-
-    volumes:
-      - ./app:/app/app
-      - ./storage:/app/storage
-
-    depends_on:
-      db:
-        condition: service_healthy
-      kafka:
-        condition: service_started
-      kafka-init:
-        condition: service_completed_successfully
-
-    gpus: all
+#  completion-worker:
+#    build: .
+#    volumes:
+#      - ./app:/app/app
+#    command: python -m app.kafka.completion_consumer
+#    environment:
+#      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+#      KAFKA_TOPIC: training-job-completed
+#      KAFKA_GROUP_ID: training-completion-workers
+#      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/model_serve_mini
+#
+#      REDIS_HOST: redis
+#      REDIS_PORT: 6379
+#
+#    depends_on:
+#      db:
+#        condition: service_healthy
+#
+#      kafka:
+#        condition: service_started
+#
+#      kafka-init:
+#        condition: service_completed_successfully
+#
+#      redis:
+#        condition: service_started
 
 
 volumes:

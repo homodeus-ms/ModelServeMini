@@ -9,7 +9,7 @@ from app.core.config import settings
 
 
 # artifact 저장, 현재는 Local drive에 -> TODO: 이후에 외부 저장소로 변경
-def save_artifact(pipeline, model_id: int) -> tuple[str, int, str]:
+def save_artifact(artifact, model_id: int) -> tuple[str, int, str]:
 
     # TODO: 이후에 백엔드도 컨테이너로 넣으면 다시 이걸로 수정
     # directory = Path(settings.model_storage_path) / str(model_id)
@@ -28,7 +28,7 @@ def save_artifact(pipeline, model_id: int) -> tuple[str, int, str]:
     artifact_path = Path(settings.model_storage_path) / relative_path
     artifact_path.parent.mkdir(parents=True, exist_ok=True)
 
-    joblib.dump(pipeline, artifact_path)
+    joblib.dump(artifact, artifact_path)
     artifact_size = artifact_path.stat().st_size
     artifact_checksum = _calculate_checksum(artifact_path)
 

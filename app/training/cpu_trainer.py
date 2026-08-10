@@ -72,7 +72,7 @@ def train(training_job: TrainingJob, dataset_ver: DatasetVersion) -> TrainingRes
     feature_importances = calculate_feature_importance(pipeline, x_test, y_test, task_type)
 
     # artifact 저장
-    artifact = {"pipeline": pipeline, "target_encoder": target_encoder}
+    artifact = {"pipeline": pipeline, "target_encoder": target_encoder, "task_type": task_type.value}
     artifact_uri, artifact_size, artifact_checksum = save_artifact(artifact, training_job.model_id)
 
     return TrainingResult(

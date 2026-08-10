@@ -90,6 +90,11 @@ class ModelVersion(Base):
         nullable=False
     )
 
+    feature_importances: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+
     deployment_status: Mapped[str] = mapped_column(
         String(30),
         nullable=False,

@@ -1,4 +1,5 @@
 from typing import Any
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,8 @@ class TrainingRequest(BaseModel):
     task_type: ModelTaskType
 
 class TrainingResultResponse(BaseModel):
+    training_batch_id: UUID
+
     training_job_id: int
     algorithm: str
 
@@ -36,6 +39,8 @@ class Recommendation(BaseModel):
     metric_score: float
 
 class TrainModelsResponse(BaseModel):
+    training_batch_id: UUID
+
     model_id: int
     total_train_try_count: int
     success_count: int
@@ -50,4 +55,5 @@ class TrainingModelSummaryInfo(BaseModel):
     status: str
 
 class TrainingModelAsyncResponse(BaseModel):
+    training_batch_id: UUID
     training_jobs: list[TrainingModelSummaryInfo]

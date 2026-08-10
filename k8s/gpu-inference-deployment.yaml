@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-inference
+
+spec:
+  replicas: 1
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: gpu-inference
+
+  template:
+    metadata:
+      labels:
+        app: gpu-inference
+
+    spec:
+      runtimeClassName: nvidia
+
+      containers:
+        - name: gpu-inference
+          image: modelservemini-gpu-inference:latest
+          imagePullPolicy: Never
+
+          command:
+            - uvicorn
+
+          args:
+            - app.inference.gpu.main:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8001"
+
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+            - name: MODEL_STORAGE_PATH
+              value: "/app/storage"
+
+            - name: REDIS_HOST
+              value: "redis"
+
+            - name: REDIS_PORT
+              value: "6379"
+
+            - name: GPU_SCHEDULER_URL
+              value: "http://gpu-scheduler:8010"
+
+          ports:
+            - containerPort: 8001
+
+          volumeMounts:
+            - name: model-storage
+              mountPath: /app/storage
+
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+
+      volumes:
+        - name: model-storage
+          hostPath:
+            path: /mnt/c/dev/ModelServeMini/storage
+            type: Directory

@@ -1,8 +1,11 @@
+from uuid import UUID
+
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.domain.model_version.enums import DeploymentStatus
 from app.domain.model_version.model import ModelVersion
+from app.domain.training_job.model import TrainingJob
 from app.domain.training_job_model_version.enums import ModelVersionRelationType
 from app.domain.training_job_model_version.model import TrainingJobModelVersion
 
@@ -25,6 +28,26 @@ def find_result_by_training_job_id(db: Session, training_job_id: int) -> ModelVe
     )
 
     return db.scalar(stmt)
+
+def find_result_versions_by_training_batch_id(db: Session, training_batch_id: UUID) -> list[ModelVersion]:
+
+    stmt = (
+        select(ModelVersion)
+        .join(
+            TrainingJobModelVersion,
+            TrainingJobModelVersion.model_version_id == ModelVersion.id,
+        )
+        .join(
+            TrainingJob,
+            TrainingJob.id == TrainingJobModelVersion.training_job_id,
+        )
+        .where(
+            TrainingJob.training_batch_id == training_batch_id,
+            TrainingJobModelVersion.relation_type == "RESULT",
+        )
+    )
+
+    return list(db.scalars(stmt).all())
 
 def find_deploy_version_by_id(db: Session, model_id: int) -> ModelVersion | None:
     stmt = select(ModelVersion).where(

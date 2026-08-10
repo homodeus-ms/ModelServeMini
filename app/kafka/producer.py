@@ -4,12 +4,11 @@ import os
 
 from confluent_kafka import Producer
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
-KAFKA_BOOTSTRAP_SERVERS = os.getenv(
-    "KAFKA_BOOTSTRAP_SERVERS",
-    "localhost:9092",
-)
+KAFKA_BOOTSTRAP_SERVERS = settings.kafka_bootstrap_servers
 
 _producer = Producer(
     {
@@ -31,27 +30,59 @@ def _delivery_report(error, message) -> None:
     )
 
 def publish_training_job(topic: str, training_job_id: int, partition_no: int | None) -> None:
-    payload = {"training_job_id": training_job_id}
+    _publish(
+        topic=topic,
+        payload={"training_job_id": training_job_id},
+        key=str(training_job_id),
+        partition_no=partition_no,
+    )
 
-    if partition_no is None:
-        _producer.produce(
-            topic=topic,
-            key=str(training_job_id),
-            value=json.dumps(payload).encode("utf-8"),
-            callback=_delivery_report,
-        )
-    else:
-        _producer.produce(
-            topic=topic,
-            partition=partition_no,
-            key=str(training_job_id),
-            value=json.dumps(payload).encode("utf-8"),
-            callback=_delivery_report,
-        )
+def publish_training_job_completed(training_job_id: int) -> None:
+    _publish(
+        topic="training-job-completed",
+        payload={"training_job_id": training_job_id},
+        key=str(training_job_id),
+    )
 
-    logger.info(f"published training job {training_job_id} to topic {topic} and partition {partition_no}")
+
+# def publish_training_batch_event(training_batch_id,
+#                                  training_job_id: int,
+#                                  completed_jobs: int,
+#                                  total_jobs: int,
+#                                  status: str,
+#                                  recommendation: dict | None = None) -> None:
+#     payload = {
+#         "training_batch_id": str(training_batch_id),
+#         "training_job_id": training_job_id,
+#         "completed_jobs": completed_jobs,
+#         "total_jobs": total_jobs,
+#         "status": status,
+#     }
+#
+#     if recommendation is not None:
+#         payload["recommendation"] = recommendation
+#
+#     _publish(
+#         topic="training-batch-events",
+#         payload=payload,
+#         key=str(training_batch_id),
+#     )
+
+def _publish(topic: str, payload: dict, key: str, partition_no: int | None = None) -> None:
+
+    kw_args = {
+        "topic": topic,
+        "key": key,
+        "value": json.dumps(payload).encode("utf-8"),
+        "callback": _delivery_report,
+    }
+
+    if partition_no is not None:
+        kw_args["partition"] = partition_no
+
+    _producer.produce(**kw_args)
+
+    logger.info(f"published topic: {topic}, key: {key}")
 
     _producer.poll(0)
-
-    # 현재 API 요청에서는 Kafka 전송 성공 여부를 확인하기 위해 flush
     _producer.flush()

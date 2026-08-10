@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 import transitions
 from sqlalchemy.orm import Session
 
+from app.core.time import utc_now
 from app.domain.dataset_version import repository as dataset_version_repository
 from app.domain.dataset_version.exceptions import DatasetVersionNotFound
 from app.domain.member import repository as member_repository
@@ -27,7 +29,10 @@ from app.domain.training_job.model import TrainingJob
 from app.domain.training_job.schema import CreateTrainingJobRequest
 from app.domain.training_job import transitions
 from app.domain.training_job_model_version import service as relation_service
-from app.training.consts import ALGORITHMS_BY_TASK_TYPE
+from app.training.consts import ALGORITHMS_BY_TASK_TYPE, TASK_TYPE_BY_ALGORITHM
+from app.domain.training_batch import service as training_batch_service
+
+
 
 CLASSIFICATION_ALGORITHMS = {
     TrainingAlgorithm.LOGISTIC_REGRESSION,
@@ -61,8 +66,30 @@ def get_training_jobs(
         status=status_value
     )
 
+def create_single_training(db: Session, request: CreateTrainingJobRequest) -> TrainingJob:
 
-def create_training_job(db: Session, request: CreateTrainingJobRequest) -> TrainingJob:
+    try:
+        batch = training_batch_service.create_training_batch(
+            db=db,
+            requested_by=request.requested_by,
+            dataset_version_id=request.dataset_version_id,
+            target_column=request.target_column,
+            task_type=TASK_TYPE_BY_ALGORITHM[request.algorithm],
+            total_jobs=1,
+        )
+
+        training_job = create_training_job(db=db, request=request, training_batch_id=batch.id)
+
+        db.commit()
+
+        return training_job
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+def create_training_job(db: Session, request: CreateTrainingJobRequest, training_batch_id: UUID) -> TrainingJob:
     model = _get_model_or_throw(db, request.model_id)
 
     dataset_version = _get_dataset_version_or_throw(
@@ -75,6 +102,7 @@ def create_training_job(db: Session, request: CreateTrainingJobRequest) -> Train
     _validate_algorithm(model.task_type, request.algorithm)
 
     training_job = TrainingJob(
+        training_batch_id=training_batch_id,
         model_id=request.model_id,
         dataset_version_id=request.dataset_version_id,
         requested_by=request.requested_by,
@@ -84,7 +112,7 @@ def create_training_job(db: Session, request: CreateTrainingJobRequest) -> Train
         training_config=request.training_config,
         metrics=None,
         failure_message=None,
-        queued_at=transitions._now(),
+        queued_at=utc_now(),
         started_at=None,
         finished_at=None
     )
@@ -103,13 +131,9 @@ def create_training_job(db: Session, request: CreateTrainingJobRequest) -> Train
                 request.base_model_version_id
             )
 
-        db.commit()
-        db.refresh(training_job)
-
         return training_job
 
     except Exception:
-        db.rollback()
         raise
 
 
@@ -126,7 +150,7 @@ def cancel_training_job(db: Session, training_job_id: int) -> TrainingJob:
         )
 
     training_job.status = TrainingJobStatus.CANCELLED.value
-    training_job.finished_at = transitions._now()
+    training_job.finished_at = utc_now()
 
     db.commit()
     db.refresh(training_job)
@@ -138,9 +162,6 @@ def mark_training_job_running(db: Session, training_job_id: int) -> TrainingJob:
     training_job = _get_training_job_or_throw(db, training_job_id)
 
     transitions.mark_running(training_job)
-
-    db.commit()
-    db.refresh(training_job)
 
     return training_job
 
@@ -160,9 +181,6 @@ def mark_training_job_failed(db: Session, training_job_id: int, failure_message:
     training_job = _get_training_job_or_throw(db, training_job_id)
 
     transitions.mark_failed(training_job, f"training job Id: {training_job_id} failed!")
-
-    db.commit()
-    db.refresh(training_job)
 
     return training_job
 

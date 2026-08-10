@@ -1,64 +1,80 @@
 import logging
-
-from dns.dnssecalgs import algorithms
 from sqlalchemy.orm import Session
 
 from app.domain.dataset_version import repository as dataset_version_repository
 from app.domain.dataset_version.exceptions import DatasetVersionNotFound
 
-from app.domain.training_job import repository as training_job_repository
-from app.domain.training_job.exceptions import TrainingJobNotFound
-
 from app.domain.training_job import service as training_job_service
 
 from app.domain.training_attempt import service as attempt_service
 from app.domain.training_attempt import repository as attempt_repository
+from app.domain.training_job.enums import TrainingAlgorithm
 from app.domain.training_job.model import TrainingJob
 from app.domain.training_job.schema import CreateTrainingJobRequest
-from app.kafka.common import get_training_topic, CPU_TOPIC
-from app.kafka.producer import publish_training_job
+from app.kafka.common import get_training_topic, CPU_TOPIC, GPU_TOPIC
+from app.kafka.producer import publish_training_job, publish_training_job_completed
 
 from app.training.completion_service import (
     complete_training_job,
     fail_training_job
 )
-from app.training.consts import ALGORITHMS_BY_TASK_TYPE, DEFAULT_CLASSIFICATION_SELECTION_METRIC, \
-    DEFAULT_REGRESSION_SELECTION_METRIC, CURRENT_ALGORITHM_COUNT, CPU_ALGORITHM_COUNT
+from app.training.consts import ALGORITHMS_BY_TASK_TYPE, CURRENT_ALGORITHM_COUNT, CPU_ALGORITHM_COUNT
 from app.training.exceptions import NotValidTaskType
-from app.training.schema import (TrainingRequest, TrainingFailureResult,
-                                 TrainingResultResponse, TrainModelsResponse, Recommendation,
+from app.training.schema import (TrainingRequest,
+                                 TrainingResultResponse,
                                  TrainingModelAsyncResponse, TrainingModelSummaryInfo)
 
-from app.domain.model.enums import ModelTaskType
-from app.domain.training_job.enums import TrainingAlgorithm
+from app.domain.training_batch import service as training_batch_service
 
 logger = logging.getLogger(__name__)
 
+
+
 def process_trainings_by_request(db: Session, request: TrainingRequest, member_id: int) -> TrainingModelAsyncResponse:
+
+    logger.info("== process_trainings_by_request start ==")
 
     algorithm_list = ALGORITHMS_BY_TASK_TYPE.get(request.task_type)
     if (algorithm_list is None) or (len(algorithm_list) == 0):
         raise NotValidTaskType("Task type not supported")
 
-    # 이 함수로 들어오는 요청은 아직 trainig_job 객체 먼저 생성해야함
+    # 1. 사용자 요청 단위 Batch 생성
+    training_batch = training_batch_service.create_training_batch(
+        db=db,
+        requested_by=member_id,
+        dataset_version_id=request.dataset_ver_id,
+        target_column=request.target_field,
+        task_type=request.task_type.value,
+        total_jobs=len(algorithm_list),
+    )
+
+    # 2. 알고리듬별 trainig_job 생성
     training_jobs = list[TrainingJob]()
 
     for algorithm in algorithm_list:
         try:
-            training_jobs.append(training_job_service.create_training_job(db,
-                CreateTrainingJobRequest(
-                    model_id=request.model_id, dataset_version_id=request.dataset_ver_id,
-                    requested_by=member_id, base_model_version_id=request.base_model_version_id,
-                    algorithm=algorithm, target_column=request.target_field,
-                    training_config=request.training_config,
-                )))
+            training_jobs.append(
+                training_job_service.create_training_job(
+                    db,
+                    CreateTrainingJobRequest(
+                        model_id=request.model_id, dataset_version_id=request.dataset_ver_id,
+                        requested_by=member_id, base_model_version_id=request.base_model_version_id,
+                        algorithm=algorithm, target_column=request.target_field,
+                        training_config=request.training_config,
+                    ),
+                    training_batch.id))
 
         except Exception as exc:
             raise
 
     assert len(training_jobs) == CURRENT_ALGORITHM_COUNT, f"training_jobs count {len(training_jobs)} != CURRENT_ALGORITHM_COUNT"
 
-    # 카프카 produce
+    # 3. Batch RUNNING
+    training_batch_service.mark_running(training_batch)
+
+    db.commit()
+
+    # 4. commit 성공 후 카프카 produce
     partition_no = 0
 
     for training_job in training_jobs:
@@ -78,6 +94,7 @@ def process_trainings_by_request(db: Session, request: TrainingRequest, member_i
 
 
     return TrainingModelAsyncResponse(
+        training_batch_id=training_batch.id,
         training_jobs=[
             TrainingModelSummaryInfo(
                 training_job_id=training_job.id,
@@ -86,38 +103,6 @@ def process_trainings_by_request(db: Session, request: TrainingRequest, member_i
             )
             for training_job in training_jobs
         ]
-    )
-
-
-
-    successes = list[TrainingResultResponse]()
-    failures = list[TrainingFailureResult]()
-
-    # 일단 단일스레드 순차 진행 -> TODO: 이후 병렬처리로 변경
-    for training_job in training_jobs:
-        try:
-            result = process_training_job(db, training_job.id)
-            successes.append(result)
-
-        except Exception as exc:
-            failures.append(
-                TrainingFailureResult(
-                    training_job_id=training_job.id,
-                    algorithm=training_job.algorithm,
-                    error_message=str(exc)
-                )
-            )
-
-    recommendation = _get_recommendation(successes, request.task_type)
-
-    return TrainModelsResponse(
-        model_id=request.model_id,
-        total_train_try_count=len(training_jobs),
-        success_count=len(successes),
-        successes=successes,
-        failure_count=len(failures),
-        failures=failures,
-        recommendation = recommendation
     )
 
 
@@ -131,9 +116,9 @@ def process_training_job(db: Session, training_job_id: int, train_func) -> Train
     attempt = attempt_service.create_attempt(db, training_job_id)
     attempt_service.mark_running(attempt)
 
-    # 함수 내부에서 commit됨 (서비스 함수중 쓰기 함수는 기본적으로 함수 내부에서 커밋함)
-    # attemp와 training_job state running 변경은 밑의 작업과는 별도로 저장되는 게 논리적으로 말이됨
+    # attemp와 training_job state running 변경은 밑의 작업과는 별도로 여기서 커밋
     training_job = training_job_service.mark_training_job_running(db, training_job_id)
+    db.commit()
 
     attempt_id = attempt.id
 
@@ -161,6 +146,7 @@ def process_training_job(db: Session, training_job_id: int, train_func) -> Train
             metrics=training_result.metrics,
             input_schema=training_result.input_schema,
             feature_columns=training_result.feature_columns,
+            feature_importances=training_result.feature_importances,
         )
 
         attempt_service.mark_succeeded(attempt)
@@ -168,8 +154,12 @@ def process_training_job(db: Session, training_job_id: int, train_func) -> Train
         # 여기서 complete_training_job에서 생성된 model_version, 관계객체 등과 함께 커밋
         db.commit()
 
+        # 여러개의 trainging_job을 총괄하는 일감 publish
+        publish_training_job_completed(training_job_id=training_job.id)
+
         # 사용자에게 필요한 정보만 따로 뽑아서 리턴
         return TrainingResultResponse(
+            training_batch_id=training_job.training_batch_id,
             training_job_id=training_job.id,
             algorithm=training_job.algorithm,
             model_version_id=model_version.id,
@@ -187,34 +177,38 @@ def process_training_job(db: Session, training_job_id: int, train_func) -> Train
         if attempt is not None:
             attempt_service.mark_failed(attempt, str(exc))
 
-        # 내부에서 commit함
         fail_training_job(db, training_job_id, str(exc))
+        db.commit()
+
+        publish_training_job_completed(training_job_id=training_job.id)
+
         raise
 
-def _get_recommendation(list: list[TrainingResultResponse],
-                         task_type: ModelTaskType) -> Recommendation | None:
-    if len(list) == 0:
-        return None
 
-    best_algorithm = list[0].algorithm
-    best_model_ver_id = list[0].model_version_id
-    criterion_metric = DEFAULT_CLASSIFICATION_SELECTION_METRIC \
-        if task_type == ModelTaskType.CLASSIFICATION \
-        else DEFAULT_REGRESSION_SELECTION_METRIC
+def execute_training_job_by_id(db: Session, training_job_id: int) -> TrainingModelSummaryInfo:
 
-    max_value = list[0].metrics.get(criterion_metric, float("-inf"))
+    training_job = training_job_service.get_training_job(db, training_job_id)
+    algorithm = TrainingAlgorithm(training_job.algorithm)
+    topic = get_training_topic(algorithm)
 
-    for train_result in list:
-        value = train_result.metrics.get(criterion_metric, float("-inf"))
-        if value > max_value:
-            max_value = value
-            best_algorithm = train_result.algorithm
-            best_model_ver_id = train_result.model_version_id
+    if topic == CPU_TOPIC:
+        publish_training_job(
+            topic=CPU_TOPIC,
+            training_job_id=training_job.id,
+            partition_no=0,
+        )
 
-    return Recommendation(
-        model_version_id=best_model_ver_id,
-        algorithm=best_algorithm,
-        criterion_metric=criterion_metric,
-        metric_score=max_value,
-    )
+    elif topic == GPU_TOPIC:
+        publish_training_job(
+            topic=GPU_TOPIC,
+            training_job_id=training_job.id,
+            partition_no=0,
+        )
 
+    else:
+        raise ValueError(f"Unsupported training topic for algorithm: {algorithm}")
+
+    return TrainingModelSummaryInfo(
+        training_job_id=training_job.id,
+        algorithm=training_job.algorithm,
+        status=training_job.status)

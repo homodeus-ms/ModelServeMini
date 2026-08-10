@@ -1,0 +1,226 @@
+import logging
+from uuid import uuid4
+
+import cuml
+import cudf
+import cupy as cp
+import numpy as np
+import time
+
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.domain.model.enums import ModelTaskType
+from app.domain.model_version.exceptions import ModelVersionNotFound
+from app.domain.model_version import repository as model_version_repository
+from app.domain.model_version.model import ModelVersion
+from app.gpu_scheduler.client import acquire_gpu, release_gpu
+from app.gpu_scheduler.schema import GpuTaskType
+from app.inference.artifact_loader import load_model_artifact
+from app.inference.exceptions import (
+    InferenceFailed,
+    InvalidInferenceInput,
+    ModelArtifactLoadFailed,
+    ModelArtifactNotFound,
+    NonNumericInferenceInput, InvalidInferenceInputValue, DeployVersionNotFound
+)
+
+from app.inference.schema import InferenceRequest, InferenceResponse
+
+logger = logging.getLogger(__name__)
+
+# Gpu scheduler 를 사용하기 위한 wrapper함수
+def predict(db: Session, model_version_id: int, request: InferenceRequest) -> InferenceResponse:
+
+    task_id = f"inference-{uuid4()}"
+    gpu_acquired = False
+
+    try:
+        logger.info("requested GPU: task_id=%s", task_id)
+
+        acquire_gpu(task_id=task_id, task_type=GpuTaskType.INFERENCE)
+
+        gpu_acquired = True
+
+        logger.info("GPU acquired: task_id=%s",task_id)
+
+        return _predict(db, model_version_id, request)
+
+    finally:
+        if gpu_acquired:
+            try:
+                release_gpu(task_id)
+
+                logger.info("GPU released: task_id=%s",task_id)
+
+            except Exception:
+                logger.exception("failed to release GPU: task_id=%s",task_id)
+
+
+def _predict(db: Session, model_version_id: int, request: InferenceRequest) -> InferenceResponse:
+
+    total_started_at = time.perf_counter()
+
+    try:
+
+        model_version = model_version_repository.find_by_id(db, model_version_id)
+        if model_version is None: raise ModelVersionNotFound(model_version_id)
+
+        #artifact_path = Path(model_version.artifact_uri)
+        artifact_path = (Path(settings.model_storage_path) / model_version.artifact_uri)
+        if not artifact_path.exists():
+            raise ModelArtifactNotFound(model_version.artifact_uri)
+
+        expected_columns = _get_expected_columns(model_version.input_schema)
+        _validate_input_columns(request.input, expected_columns)
+
+        ordered_input = _create_ordered_input(request.input, expected_columns)
+
+        started_at = time.perf_counter()
+        artifact = load_model_artifact(model_version_id, artifact_path)
+        logger.info("artifact load time: %.2f ms",(time.perf_counter() - started_at) * 1000)
+        # 1건
+        started_at = time.perf_counter()
+        dataframe = cudf.DataFrame([ordered_input], columns=expected_columns)
+        logger.info("dataframe build time: %.2f ms",(time.perf_counter() - started_at) * 1000)
+
+        started_at = time.perf_counter()
+        prediction, probabilities = _predict_by_task_type(artifact, dataframe)
+        logger.info("predict elapsed time: %.2f ms",(time.perf_counter() - started_at) * 1000)
+
+        return InferenceResponse(
+            model_version_id=model_version.id,
+            prediction=prediction,
+            probabilities=probabilities
+        )
+
+    finally:
+        elapsed_ms = (time.perf_counter() - total_started_at) * 1000
+        logger.info(f"GPU inferenced completed. {model_version_id}'s latency is {elapsed_ms} ms")
+
+def _predict_by_task_type(artifact,
+                          dataframe: cudf.DataFrame) -> tuple[object, dict[str, float] | None]:
+    task_type = artifact.get("task_type")
+
+    if task_type == ModelTaskType.CLASSIFICATION.value:
+        return _predict_classfication(artifact, dataframe)
+
+    if task_type == ModelTaskType.REGRESSION.value:
+        prediction = _predict_regression(artifact, dataframe)
+        return prediction, None
+
+    raise InferenceFailed(f"Unsupported task type: {task_type}")
+
+
+def _predict_classfication(artifact,
+                           dataframe: cudf.DataFrame) -> tuple[object, dict[str, float] | None]:
+    pipeline = artifact.get("pipeline")
+    target_encoder = artifact.get("target_encoder")
+    predictions = pipeline.predict(dataframe)
+    prediction = _to_python_value(predictions[0])
+
+    class_labels = pipeline.classes_
+
+    if target_encoder is not None:
+        predictions_cpu = cp.asnumpy(predictions)
+        decoded_predictions = target_encoder.inverse_transform(predictions_cpu)
+        prediction = _to_python_value(decoded_predictions[0])
+        class_labels = target_encoder.inverse_transform(np.asarray(class_labels))
+
+    probabilities = None
+
+    # RandomForestClassifier인 경우
+    if hasattr(pipeline, "predict_proba"):
+        probability_result = pipeline.predict_proba(dataframe)[0]
+        probabilities = {
+            str(class_label): float(probability)
+            for class_label, probability in zip(
+                class_labels,
+                probability_result,
+            )
+        }
+
+    return prediction, probabilities
+
+def _predict_regression(artifact,
+                        dataframe: cudf.DataFrame) -> tuple[object, dict[str, float] | None]:
+
+    pipeline = artifact.get("pipeline")
+    predictions = pipeline.predict(dataframe)
+    return _to_python_value(predictions[0])
+
+def _get_expected_columns(input_schema: dict[str, Any] | None) -> list[str]:
+
+    if input_schema is None:
+        raise InvalidInferenceInput()
+
+    columns = input_schema.get("columns")
+
+    if not isinstance(columns, list):
+        raise InvalidInferenceInput()
+
+    expected_columns: list[str] = []
+
+    for column in columns:
+        if not isinstance(column, dict):
+            raise InvalidInferenceInput()
+
+        name = column.get("name")
+
+        if not isinstance(name, str):
+            raise InvalidInferenceInput()
+
+        expected_columns.append(name)
+
+    return expected_columns
+
+
+def _validate_input_columns(
+    input_data: dict[str, Any],
+    expected_columns: list[str]
+) -> None:
+    input_columns = set(input_data.keys())
+    expected_column_set = set(expected_columns)
+
+    missing_columns = sorted(
+        expected_column_set - input_columns
+    )
+
+    extra_columns = sorted(
+        input_columns - expected_column_set
+    )
+
+    if missing_columns or extra_columns:
+        raise InvalidInferenceInput(
+            missing_columns,
+            extra_columns
+        )
+
+
+def _create_ordered_input(input_data: dict[str, Any], expected_columns: list[str]) -> dict[str, int | float]:
+
+    ordered_input: dict[str, Any] = {}
+
+    for column in expected_columns:
+
+        value = input_data[column]
+
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            raise InvalidInferenceInputValue(
+                column=column,
+                value_type=type(value).__name__
+            )
+
+        ordered_input[column] = value
+
+    return ordered_input
+
+
+def _to_python_value(value: Any) -> Any:
+    if hasattr(value, "item"):
+        return value.item()
+
+    return value

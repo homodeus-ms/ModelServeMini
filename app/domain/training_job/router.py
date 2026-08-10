@@ -45,7 +45,7 @@ def get_training_jobs(
 
 @router.post("", response_model=TrainingJobResponse, status_code=status.HTTP_201_CREATED)
 def create_training_job(request: CreateTrainingJobRequest, db: Session = Depends(get_db)) -> TrainingJobResponse:
-    return service.create_training_job(db, request)
+    return service.create_single_training(db, request)
 
 
 @router.post("/{training_job_id}/cancel", response_model=TrainingJobResponse)

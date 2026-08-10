@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: completion-worker
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: completion-worker
+
+  template:
+    metadata:
+      labels:
+        app: completion-worker
+
+    spec:
+      containers:
+        - name: completion-worker
+          image: modelservemini-completion-worker:latest
+          imagePullPolicy: Never
+
+          command:
+            - python
+
+          args:
+            - -m
+            - app.kafka.completion_consumer
+
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:29092"
+
+            - name: KAFKA_TOPIC
+              value: "training-job-completed"
+
+            - name: KAFKA_GROUP_ID
+              value: "training-completion-workers"
+
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+            - name: REDIS_HOST
+              value: "redis"
+
+            - name: REDIS_PORT
+              value: "6379"

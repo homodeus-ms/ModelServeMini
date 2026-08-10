@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: gpu-scheduler
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: gpu-scheduler
+
+  template:
+    metadata:
+      labels:
+        app: gpu-scheduler
+
+    spec:
+      containers:
+        - name: gpu-scheduler
+          image: modelservemini-gpu-scheduler:latest
+          imagePullPolicy: Never
+
+          command:
+            - python
+            - -m
+            - uvicorn
+            - app.gpu_scheduler.main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8010"
+
+          ports:
+            - containerPort: 8010
+
+          env:
+            - name: REDIS_HOST
+              value: "redis"
+
+            - name: REDIS_PORT
+              value: "6379"
+
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+            - name: DATASET_STORAGE_PATH
+              value: "/app/storage/datasets"
+
+            - name: MODEL_STORAGE_PATH
+              value: "/app/storage"
+
+              
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: gpu-scheduler
+
+spec:
+  selector:
+    app: gpu-scheduler
+
+  ports:
+    - protocol: TCP
+      port: 8010
+      targetPort: 8010
+
+  type: ClusterIP

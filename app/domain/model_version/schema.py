@@ -14,6 +14,7 @@ class CreateModelVersionData(BaseModel):
     metrics: dict[str, Any]
     input_schema: dict[str, Any] | None = None
     feature_columns: list[str]
+    feature_importances: list[dict] | None = None
 
 
 class ModelVersionResponse(BaseModel):
@@ -38,3 +39,9 @@ class ModelVersionResponse(BaseModel):
 
     created_at: datetime
 
+class ModelVersionCache(BaseModel):
+    id : int
+    model_id : int
+    algorithm : str
+    artifact_uri: str
+    input_schema : dict[str, Any] | None
