@@ -3,7 +3,9 @@ GPU_TOPIC = "training-jobs-gpu"
 
 GPU_ALGORITHMS = {
     "XGBOOST_CLASSIFIER_GPU",
+    "PYTORCH_MLP_CLASSIFIER",
     "XGBOOST_REGRESSOR_GPU",
+    "PYTORCH_MLP_REGRESSOR",
 }
 
 def get_training_topic(algorithm: str) -> str:

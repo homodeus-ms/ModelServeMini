@@ -11,6 +11,7 @@ class GpuTaskType(str, Enum):
 class AcquireGpuRequest(BaseModel):
     task_id: str = Field(min_length=1)
     task_type: GpuTaskType
+    resume: bool = False
 
 
 class AcquireGpuResponse(BaseModel):
@@ -36,4 +37,5 @@ class GpuSchedulerStatusResponse(BaseModel):
     waiting_tasks: list[WaitingTask]
 
 
-
+class ShouldYieldResponse(BaseModel):
+    should_yield: bool

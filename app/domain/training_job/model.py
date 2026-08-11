@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped
 from sqlalchemy.orm import mapped_column
 
+from app.core.time import utc_now
 from app.db.base import BaseEntity
 
 
@@ -82,7 +83,7 @@ class TrainingJob(BaseEntity):
     queued_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        server_default=func.now(),
+        default=utc_now()
     )
 
     started_at: Mapped[datetime | None] = mapped_column(

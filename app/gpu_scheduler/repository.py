@@ -55,7 +55,6 @@ def clear_owner() -> None:
 def next_sequence() -> int:
     return redis_client.incr(SEQUENCE_KEY)
 
-
 def add_waiting_task(task_id: str, task_type: GpuTaskType, priority: int) -> None:
     sequence = next_sequence()
 
@@ -100,6 +99,13 @@ def pop_next_waiting_task() -> dict | None:
 
 def is_waiting(task_id: str) -> bool:
     return bool(redis_client.sismember(WAITING_IDS_KEY, task_id))
+
+def get_highest_priority_waiting_task() -> dict | None:
+
+    members = redis_client.zrange(WAITING_KEY, 0, 0)
+    if not members:
+        return None
+    return json.loads(members[0])
 
 
 _RELEASE_SCRIPT = """

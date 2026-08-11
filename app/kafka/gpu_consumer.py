@@ -1,14 +1,17 @@
 import logging
 import os
+from typing import Callable
+
 import app.core.logging
 import app.db.models
 
 from app.db.session import SessionLocal
+from app.domain.training_job.enums import TrainingAlgorithm
 from app.gpu_scheduler.client import acquire_gpu, release_gpu
 from app.gpu_scheduler.schema import GpuTaskType
 from app.kafka.consumer import run_training_consumer
-from app.training import processor, gpu_trainer
-
+from app.training import processor, gpu_trainer, pytorch_trainer
+from app.domain.training_job import service as training_job_service
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +27,11 @@ def process_gpu_training_job(training_job_id: int) -> None:
         gpu_acquired = True
         logger.info("GPU acquired: task_id=%s", task_id)
 
-        processor.process_training_job(db, training_job_id, gpu_trainer.train)
+        training_job = training_job_service.get_training_job(db, training_job_id)
+        algorithm = TrainingAlgorithm(training_job.algorithm)
+        train_function = _get_gpu_train_function(algorithm)
+
+        processor.process_training_job(db, training_job_id, train_function)
         logger.info("%s is done by GPU Worker", training_job_id)
 
     except Exception as e:
@@ -40,6 +47,11 @@ def process_gpu_training_job(training_job_id: int) -> None:
                 logger.exception("failed to release GPU: task_id=%s", task_id)
 
         db.close()
+
+def _get_gpu_train_function(algorithm: TrainingAlgorithm) -> Callable:
+    if algorithm == TrainingAlgorithm.PYTORCH_MLP_CLASSIFIER:
+        return pytorch_trainer.train
+    return gpu_trainer.train
 
 
 def main() -> None:

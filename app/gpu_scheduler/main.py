@@ -5,7 +5,7 @@ from app.gpu_scheduler.schema import (
     AcquireGpuRequest,
     AcquireGpuResponse,
     GpuSchedulerStatusResponse,
-    ReleaseGpuRequest,
+    ReleaseGpuRequest, ShouldYieldResponse,
 )
 
 
@@ -33,3 +33,7 @@ def release_gpu(request: ReleaseGpuRequest) -> dict:
 @app.get("/gpu/status", response_model=GpuSchedulerStatusResponse)
 def get_gpu_status() -> GpuSchedulerStatusResponse:
     return service.get_status()
+
+@app.get("/gpu/should-yield/{task_id}", response_model=ShouldYieldResponse)
+def should_yield(task_id: str) -> ShouldYieldResponse:
+    return service.should_yield(task_id)

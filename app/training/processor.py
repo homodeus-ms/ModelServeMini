@@ -1,4 +1,6 @@
 import logging
+from typing import Callable
+
 from sqlalchemy.orm import Session
 
 from app.domain.dataset_version import repository as dataset_version_repository
@@ -212,3 +214,4 @@ def execute_training_job_by_id(db: Session, training_job_id: int) -> TrainingMod
         training_job_id=training_job.id,
         algorithm=training_job.algorithm,
         status=training_job.status)
+

@@ -4,6 +4,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import joblib
+import torch
 
 from app.core.config import settings
 
@@ -37,6 +38,21 @@ def save_artifact(artifact, model_id: int) -> tuple[str, int, str]:
         artifact_size,
         artifact_checksum,
     )
+
+def save_pytorch_artifact(artifact: dict, model_id: int) -> tuple[str, int, str]:
+
+    relative_path = Path("models") / str(model_id) / f"{uuid4().hex}.pt"
+    artifact_path = Path(settings.model_storage_path) / relative_path
+
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+
+    torch.save(artifact, artifact_path)
+
+    artifact_size = artifact_path.stat().st_size
+    artifact_checksum = _calculate_checksum(artifact_path)
+
+    return str(relative_path), artifact_size, artifact_checksum,
+
 
 
 def _calculate_checksum(path: Path) -> str:

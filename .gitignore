@@ -27,3 +27,6 @@ storage/
 *.pkl
 *.pt
 *.pth
+
+# test, study dir
+pytorch_study/
