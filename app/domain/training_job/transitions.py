@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any
 
 from app.core.time import utc_now
@@ -10,8 +9,11 @@ from app.domain.training_job.model import TrainingJob
 def mark_running(training_job: TrainingJob) -> None:
     _ensure_status(training_job, {TrainingJobStatus.PENDING, TrainingJobStatus.FAILED}, TrainingJobStatus.RUNNING)
 
+    now = utc_now()
+    if training_job.queued_at is not None and now < training_job.queued_at:
+        now = training_job.queued_at
     training_job.status = TrainingJobStatus.RUNNING.value
-    training_job.started_at = utc_now()
+    training_job.started_at = now
 
 
 def mark_succeeded(training_job: TrainingJob, metrics: dict[str, Any]) -> None:
@@ -20,7 +22,11 @@ def mark_succeeded(training_job: TrainingJob, metrics: dict[str, Any]) -> None:
     training_job.status = TrainingJobStatus.SUCCEEDED.value
     training_job.metrics = metrics
     training_job.failure_message = None
-    training_job.finished_at = utc_now()
+
+    now = utc_now()
+    if training_job.started_at is not None and now < training_job.started_at:
+        now = training_job.started_at
+    training_job.finished_at = now
 
 
 def mark_failed(training_job: TrainingJob, failure_message: str) -> None:

@@ -6,6 +6,8 @@ import cudf
 import cupy as cp
 import numpy as np
 import time
+import torch
+import torch.nn as nn
 
 from pathlib import Path
 from typing import Any
@@ -23,12 +25,12 @@ from app.inference.artifact_loader import load_model_artifact
 from app.inference.exceptions import (
     InferenceFailed,
     InvalidInferenceInput,
-    ModelArtifactLoadFailed,
     ModelArtifactNotFound,
-    NonNumericInferenceInput, InvalidInferenceInputValue, DeployVersionNotFound
+    InvalidInferenceInputValue
 )
 
 from app.inference.schema import InferenceRequest, InferenceResponse
+from app.training.pytorch.preprocessing import prepare_inference_data
 
 logger = logging.getLogger(__name__)
 
@@ -79,17 +81,33 @@ def _predict(db: Session, model_version_id: int, request: InferenceRequest) -> I
 
         ordered_input = _create_ordered_input(request.input, expected_columns)
 
+
+        # Artifact load
         started_at = time.perf_counter()
         artifact = load_model_artifact(model_version_id, artifact_path)
         logger.info("artifact load time: %.2f ms",(time.perf_counter() - started_at) * 1000)
-        # 1건
-        started_at = time.perf_counter()
-        dataframe = cudf.DataFrame([ordered_input], columns=expected_columns)
-        logger.info("dataframe build time: %.2f ms",(time.perf_counter() - started_at) * 1000)
 
+
+        # Prediction
         started_at = time.perf_counter()
-        prediction, probabilities = _predict_by_task_type(artifact, dataframe)
-        logger.info("predict elapsed time: %.2f ms",(time.perf_counter() - started_at) * 1000)
+        if artifact.get("framework") == "PYTORCH":
+            prediction, probabilities = _predict_pytorch(
+                artifact=artifact,
+                input_data=ordered_input,
+            )
+        else:
+            dataframe = cudf.DataFrame(
+                [ordered_input],
+                columns=expected_columns,
+            )
+            prediction, probabilities = _predict_by_task_type(
+                artifact,
+                dataframe,
+            )
+        logger.info(
+            "predict elapsed time: %.2f ms",
+            (time.perf_counter() - started_at) * 1000,
+        )
 
         return InferenceResponse(
             model_version_id=model_version.id,
@@ -100,6 +118,7 @@ def _predict(db: Session, model_version_id: int, request: InferenceRequest) -> I
     finally:
         elapsed_ms = (time.perf_counter() - total_started_at) * 1000
         logger.info(f"GPU inferenced completed. {model_version_id}'s latency is {elapsed_ms} ms")
+
 
 def _predict_by_task_type(artifact,
                           dataframe: cudf.DataFrame) -> tuple[object, dict[str, float] | None]:
@@ -152,6 +171,121 @@ def _predict_regression(artifact,
     predictions = pipeline.predict(dataframe)
     return _to_python_value(predictions[0])
 
+def _predict_pytorch(
+    artifact: dict,
+    input_data: dict[str, Any],
+) -> tuple[
+    object,
+    dict[str, float] | None,
+]:
+
+    model = artifact["model"]
+
+    input_tensor = prepare_inference_data(
+        input_data=input_data,
+        encoded_feature_columns=artifact[
+            "encoded_feature_columns"
+        ],
+    )
+
+    task_type = artifact.get(
+        "task_type"
+    )
+
+    if task_type == ModelTaskType.CLASSIFICATION.value:
+        return _predict_pytorch_classification(
+            artifact=artifact,
+            model=model,
+            input_tensor=input_tensor,
+        )
+
+    if task_type == ModelTaskType.REGRESSION.value:
+        return _predict_pytorch_regression(
+            model=model,
+            input_tensor=input_tensor,
+        )
+
+    raise InferenceFailed(
+        f"Unsupported PyTorch task type: {task_type}"
+    )
+
+
+def _predict_pytorch_classification(
+    artifact: dict,
+    model: nn.Module,
+    input_tensor: torch.Tensor,
+) -> tuple[
+    object,
+    dict[str, float],
+]:
+
+    with torch.no_grad():
+
+        logits = model(
+            input_tensor
+        )
+
+        probabilities_tensor = torch.softmax(
+            logits,
+            dim=1,
+        )
+
+        class_index = torch.argmax(
+            probabilities_tensor,
+            dim=1,
+        ).item()
+
+    target_categories = artifact[
+        "target_categories"
+    ]
+
+    prediction = target_categories[
+        class_index
+    ]
+
+    probability_values = (
+        probabilities_tensor[0]
+        .detach()
+        .cpu()
+        .tolist()
+    )
+
+    probabilities = {
+        str(category): float(probability)
+        for category, probability in zip(
+            target_categories,
+            probability_values,
+        )
+    }
+
+    return prediction, probabilities
+
+
+def _predict_pytorch_regression(
+    model: nn.Module,
+    input_tensor: torch.Tensor,
+) -> tuple[
+    float,
+    None,
+]:
+
+    with torch.no_grad():
+
+        prediction_tensor = model(
+            input_tensor
+        )
+
+    prediction = float(
+        prediction_tensor
+        .detach()
+        .cpu()
+        .item()
+    )
+
+    return prediction, None
+
+
+
 def _get_expected_columns(input_schema: dict[str, Any] | None) -> list[str]:
 
     if input_schema is None:
@@ -192,6 +326,23 @@ def _validate_input_columns(
     extra_columns = sorted(
         input_columns - expected_column_set
     )
+
+    logger.info(
+        "expected_columns=%s",
+        expected_columns,
+    )
+
+    logger.info(
+        "input_columns=%s",
+        list(input_data.keys()),
+    )
+
+    logger.info(
+        "missing_columns=%s extra_columns=%s",
+        missing_columns,
+        extra_columns,
+    )
+
 
     if missing_columns or extra_columns:
         raise InvalidInferenceInput(

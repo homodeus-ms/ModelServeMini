@@ -1,6 +1,5 @@
 from sklearn.inspection import permutation_importance
 from sklearn.pipeline import Pipeline
-import numpy as np
 
 from app.domain.model.enums import ModelTaskType
 

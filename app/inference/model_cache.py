@@ -2,9 +2,9 @@ import logging
 from collections import OrderedDict
 from typing import Any
 
-logger = logging.getLogger(__name__)
+from app.inference.consts import MAX_CACHE_SIZE
 
-MAX_CACHE_SIZE = 3
+logger = logging.getLogger(__name__)
 
 _model_cache_LRU: OrderedDict[int, Any] = OrderedDict()
 

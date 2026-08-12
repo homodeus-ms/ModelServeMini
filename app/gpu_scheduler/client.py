@@ -10,7 +10,7 @@ GPU_SCHEDULER_URL = os.getenv(
     "http://localhost:8010",
 )
 
-ACQUIRE_RETRY_INTERVAL = 0.1
+ACQUIRE_RETRY_INTERVAL = 0.2
 
 
 # gpu-worker, gpu-inference -> GpuScheduler Client -> (http call) -> GpuScheduler Main(Router)

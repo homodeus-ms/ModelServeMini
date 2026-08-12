@@ -4,20 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.domain.model_version.exceptions import ModelVersionNotFound
 from app.domain.model_version.mapper import model_version_to_cache_dto
-from app.domain.model_version.model import ModelVersion
 from app.domain.model_version.schema import ModelVersionCache
-from app.domain.training_job.enums import TrainingAlgorithm
 from app.inference.exceptions import DeployVersionNotFound
 from app.inference.schema import InferenceRequest, InferenceResponse
 from app.domain.model_version import repository as model_version_repository
 from app.inference.cpu import service as cpu_service
 from app.inference.gpu import client as gpu_client
 from app.redis.cache import get_deployed_model_version_redis, set_deployed_model_version_redis
-
-GPU_ALGORITHMS = {
-    TrainingAlgorithm.XGBOOST_CLASSIFIER_GPU.value,
-    TrainingAlgorithm.XGBOOST_REGRESSOR_GPU.value,
-}
+from app.training.algorithm_registry import GPU_ALGORITHMS
 
 logger = logging.getLogger(__name__)
 

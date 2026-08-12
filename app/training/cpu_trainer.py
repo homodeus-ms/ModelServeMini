@@ -6,7 +6,7 @@ from app.domain.dataset_version.model import DatasetVersion
 from app.domain.training_job.enums import TrainingAlgorithm
 from app.domain.training_job.model import TrainingJob
 from app.training.artifact_storage import save_artifact
-from app.training.consts import TASK_TYPE_BY_ALGORITHM
+from app.training.algorithm_registry import TASK_TYPE_BY_ALGORITHM
 from app.training.exceptions import NotValidTaskType
 from app.training.result import TrainingResult
 from app.training.utils import resolve_dataset_path

@@ -8,6 +8,10 @@ class TrainingJobStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+####################################################
+# training_job.enums - ALGORITHM_REGISTRY 일관성 유지!
+####################################################
+
 class TrainingAlgorithm(str, Enum):
     # Classifier
     LOGISTIC_REGRESSION = "LOGISTIC_REGRESSION"
@@ -28,34 +32,34 @@ class ExecutionDevice(StrEnum):
     CPU = "CPU"
     GPU = "GPU"
 
-DEVICE_BY_ALGORITHM = {
-    TrainingAlgorithm.LOGISTIC_REGRESSION:
-        ExecutionDevice.CPU,
-
-    TrainingAlgorithm.RANDOM_FOREST_CLASSIFIER:
-        ExecutionDevice.CPU,
-
-    TrainingAlgorithm.GRADIENT_BOOSTING_CLASSIFIER:
-        ExecutionDevice.CPU,
-
-    TrainingAlgorithm.XGBOOST_CLASSIFIER_GPU:
-        ExecutionDevice.GPU,
-
-    TrainingAlgorithm.PYTORCH_MLP_CLASSIFIER:
-        ExecutionDevice.GPU,
-
-    TrainingAlgorithm.LINEAR_REGRESSION:
-        ExecutionDevice.CPU,
-
-    TrainingAlgorithm.RANDOM_FOREST_REGRESSOR:
-        ExecutionDevice.CPU,
-
-    TrainingAlgorithm.GRADIENT_BOOSTING_REGRESSOR:
-        ExecutionDevice.CPU,
-
-    TrainingAlgorithm.XGBOOST_REGRESSOR_GPU:
-        ExecutionDevice.GPU,
-
-    TrainingAlgorithm.PYTORCH_MLP_REGRESSOR:
-        ExecutionDevice.GPU,
-}
+# DEVICE_BY_ALGORITHM = {
+#     TrainingAlgorithm.LOGISTIC_REGRESSION:
+#         ExecutionDevice.CPU,
+#
+#     TrainingAlgorithm.RANDOM_FOREST_CLASSIFIER:
+#         ExecutionDevice.CPU,
+#
+#     TrainingAlgorithm.GRADIENT_BOOSTING_CLASSIFIER:
+#         ExecutionDevice.CPU,
+#
+#     TrainingAlgorithm.XGBOOST_CLASSIFIER_GPU:
+#         ExecutionDevice.GPU,
+#
+#     TrainingAlgorithm.PYTORCH_MLP_CLASSIFIER:
+#         ExecutionDevice.GPU,
+#
+#     TrainingAlgorithm.LINEAR_REGRESSION:
+#         ExecutionDevice.CPU,
+#
+#     TrainingAlgorithm.RANDOM_FOREST_REGRESSOR:
+#         ExecutionDevice.CPU,
+#
+#     TrainingAlgorithm.GRADIENT_BOOSTING_REGRESSOR:
+#         ExecutionDevice.CPU,
+#
+#     TrainingAlgorithm.XGBOOST_REGRESSOR_GPU:
+#         ExecutionDevice.GPU,
+#
+#     TrainingAlgorithm.PYTORCH_MLP_REGRESSOR:
+#         ExecutionDevice.GPU,
+# }

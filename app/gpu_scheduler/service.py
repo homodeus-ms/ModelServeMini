@@ -1,6 +1,3 @@
-import heapq
-from itertools import count
-from threading import Lock
 
 from app.gpu_scheduler import repository
 from app.gpu_scheduler.schema import (

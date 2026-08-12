@@ -1,6 +1,4 @@
 import logging
-from typing import Callable
-
 from sqlalchemy.orm import Session
 
 from app.domain.dataset_version import repository as dataset_version_repository
@@ -13,14 +11,14 @@ from app.domain.training_attempt import repository as attempt_repository
 from app.domain.training_job.enums import TrainingAlgorithm
 from app.domain.training_job.model import TrainingJob
 from app.domain.training_job.schema import CreateTrainingJobRequest
-from app.kafka.common import get_training_topic, CPU_TOPIC, GPU_TOPIC
+from app.kafka.common import get_training_topic, CPU_TOPIC, GPU_TOPIC, CPU_TOPIC_PARTITION_COUNT
 from app.kafka.producer import publish_training_job, publish_training_job_completed
 
 from app.training.completion_service import (
     complete_training_job,
     fail_training_job
 )
-from app.training.consts import ALGORITHMS_BY_TASK_TYPE, CURRENT_ALGORITHM_COUNT, CPU_ALGORITHM_COUNT
+from app.training.algorithm_registry import ALGORITHMS_BY_TASK_TYPE
 from app.training.exceptions import NotValidTaskType
 from app.training.schema import (TrainingRequest,
                                  TrainingResultResponse,
@@ -69,8 +67,6 @@ def process_trainings_by_request(db: Session, request: TrainingRequest, member_i
         except Exception as exc:
             raise
 
-    assert len(training_jobs) == CURRENT_ALGORITHM_COUNT, f"training_jobs count {len(training_jobs)} != CURRENT_ALGORITHM_COUNT"
-
     # 3. Batch RUNNING
     training_batch_service.mark_running(training_batch)
 
@@ -85,7 +81,7 @@ def process_trainings_by_request(db: Session, request: TrainingRequest, member_i
         logger.info(f"topic: {topic}, training_job_id: {training_job.id}, algorithm: {training_job.algorithm}")
 
         if topic == CPU_TOPIC:
-            partition_no = (partition_no + 1) % CPU_ALGORITHM_COUNT
+            partition_no = (partition_no + 1) % CPU_TOPIC_PARTITION_COUNT
             publish_training_job(
                 topic=topic,
                 training_job_id=training_job.id, partition_no=partition_no)

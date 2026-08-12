@@ -10,7 +10,8 @@ from app.domain.training_job.enums import TrainingAlgorithm
 from app.gpu_scheduler.client import acquire_gpu, release_gpu
 from app.gpu_scheduler.schema import GpuTaskType
 from app.kafka.consumer import run_training_consumer
-from app.training import processor, gpu_trainer, pytorch_trainer
+from app.training import processor, gpu_trainer
+from app.training.pytorch import trainer as pytorch_trainer
 from app.domain.training_job import service as training_job_service
 
 logger = logging.getLogger(__name__)
@@ -49,8 +50,12 @@ def process_gpu_training_job(training_job_id: int) -> None:
         db.close()
 
 def _get_gpu_train_function(algorithm: TrainingAlgorithm) -> Callable:
-    if algorithm == TrainingAlgorithm.PYTORCH_MLP_CLASSIFIER:
+    if algorithm in {
+        TrainingAlgorithm.PYTORCH_MLP_CLASSIFIER,
+        TrainingAlgorithm.PYTORCH_MLP_REGRESSOR,
+    }:
         return pytorch_trainer.train
+
     return gpu_trainer.train
 
 

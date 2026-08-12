@@ -11,9 +11,8 @@ from app.inference.artifact_loader import load_model_artifact
 from app.inference.exceptions import (
     InferenceFailed,
     InvalidInferenceInput,
-    ModelArtifactLoadFailed,
     ModelArtifactNotFound,
-    NonNumericInferenceInput, InvalidInferenceInputValue, DeployVersionNotFound
+    InvalidInferenceInputValue
 )
 
 from app.inference.schema import InferenceRequest, InferenceResponse

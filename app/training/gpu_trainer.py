@@ -7,7 +7,7 @@ from cuml.preprocessing import LabelEncoder
 from cuml.model_selection import train_test_split
 
 from app.training.artifact_storage import save_artifact
-from app.training.consts import TASK_TYPE_BY_ALGORITHM
+from app.training.algorithm_registry import TASK_TYPE_BY_ALGORITHM
 from app.training.exceptions import NotValidTaskType
 from app.training_pipeline.gpu_importance import gpu_calculate_feature_importance
 from app.training_pipeline.gpu_validation import validate_gpu_features

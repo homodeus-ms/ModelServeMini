@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -14,7 +13,6 @@ from app.domain.model import repository as model_repository
 from app.domain.model.enums import ModelTaskType
 from app.domain.model.exceptions import ModelNotFound
 from app.domain.model_version.exceptions import ModelVersionNotFound
-from app.domain.model_version.model import ModelVersion
 from app.domain.model_version import repository as model_version_repository
 from app.domain.training_job import repository
 from app.domain.training_job.enums import TrainingAlgorithm, TrainingJobStatus
@@ -29,7 +27,7 @@ from app.domain.training_job.model import TrainingJob
 from app.domain.training_job.schema import CreateTrainingJobRequest
 from app.domain.training_job import transitions
 from app.domain.training_job_model_version import service as relation_service
-from app.training.consts import ALGORITHMS_BY_TASK_TYPE, TASK_TYPE_BY_ALGORITHM
+from app.training.algorithm_registry import ALGORITHMS_BY_TASK_TYPE, TASK_TYPE_BY_ALGORITHM
 from app.domain.training_batch import service as training_batch_service
 
 

@@ -7,7 +7,7 @@ from sklearn.metrics import (
 
 from app.domain.model.enums import ModelTaskType
 from app.domain.training_job.enums import TrainingAlgorithm
-from app.training.consts import ALGORITHMS_BY_TASK_TYPE
+from app.training.algorithm_registry import ALGORITHMS_BY_TASK_TYPE
 
 CLASSIFICATION_ALGORITHMS = ALGORITHMS_BY_TASK_TYPE.get(ModelTaskType.CLASSIFICATION)
 
