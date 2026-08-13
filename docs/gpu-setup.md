@@ -406,96 +406,122 @@ imagePullPolicy: Never
 > Container Registry를 사용할 수 있습니다.
 
 ---
----
 
-### 9. Kubernetes Components
+### 9. ModelServeMini 배포
 
-GPU 환경에서는 다음 구성요소가 실행됩니다.
+현재 구성에서는 PostgreSQL은 Docker Compose로 실행하고,
+나머지 서비스는 Kubernetes에 배포합니다.
 
-```text
-FastAPI
-    │
-    ├── Kafka
-    │     ├── CPU Worker × 3
-    │     ├── GPU Worker
-    │     └── Completion Worker
-    │
-    ├── Redis
-    │
-    └── GPU Inference
-            │
-            └── GPU Scheduler
+#### Environment 설정
+
+`.env.example`을 복사하여 `.env` 파일을 생성합니다.
+
+Linux / WSL:
+
+```bash
+cp .env.example .env
 ```
 
-주요 Pod:
+필요한 경우 `.env`의 설정값을 환경에 맞게 수정합니다.
 
-```text
-api
-cpu-worker × 3
-gpu-worker
-gpu-inference
-gpu-scheduler
-completion-worker
-kafka
-redis
-```
-
-현재 PostgreSQL은 Docker Container로 실행합니다.
-
----
-
-### 10. Kubernetes Service Communication
-
-Pod 간 통신에는 Kubernetes Service DNS를 사용합니다.
-
-```text
-Kafka          kafka:9092
-Redis          redis:6379
-GPU Scheduler  gpu-scheduler:<service-port>
-GPU Inference  gpu-inference:8001
-```
-
-예를 들어 FastAPI Pod에서 GPU Inference Pod를 호출할 때:
-
-```text
-http://localhost:8001
-```
-
-을 사용하면 안 됩니다.
-
-Pod마다 독립적인 Network Namespace를 사용하므로 `localhost`는
-FastAPI Pod 자신을 의미합니다.
-
-따라서:
-
-```text
-http://gpu-inference:8001
-```
-
-처럼 Kubernetes Service 이름을 사용합니다.
-
-API Deployment 예:
-
-```yaml
-- name: GPU_INFERENCE_URL
-  value: "http://gpu-inference:8001"
-```
-
----
-
-### 11. ModelServeMini 배포
-
-현재 구성에서는 PostgreSQL만 Docker Compose로 실행합니다.
+#### PostgreSQL 실행
 
 ```bash
 docker compose up -d db
 ```
 
-Kubernetes Resource 적용:
+PostgreSQL 상태를 확인합니다.
 
 ```bash
-sudo k3s kubectl apply -f k8s/
+docker compose ps
 ```
+
+PostgreSQL이 정상적으로 실행된 것을 확인한 후 Kubernetes Resource를 배포합니다.
+
+#### Kafka / Redis 배포
+
+먼저 Kafka와 Redis를 실행합니다.
+
+```bash
+sudo k3s kubectl apply -f k8s/kafka.yaml
+sudo k3s kubectl apply -f k8s/redis.yaml
+```
+
+Pod 상태를 확인합니다.
+
+```bash
+sudo k3s kubectl get pods
+```
+
+`kafka-0`와 Redis Pod가 `Running` 상태가 된 것을 확인합니다.
+
+#### Kafka Topic 생성
+
+Kafka가 실행된 후 초기 Topic을 생성합니다.
+
+```bash
+sudo k3s kubectl apply -f k8s/kafka-init-job.yaml
+```
+
+Kafka Init Job이 완료될 때까지 기다립니다.
+
+```bash
+sudo k3s kubectl wait \
+  --for=condition=complete \
+  job/kafka-init \
+  --timeout=120s
+```
+
+정상적으로 완료되었는지 확인합니다.
+
+```bash
+sudo k3s kubectl get pods
+```
+
+`kafka-init`이 `Completed` 상태이면 정상입니다.
+
+#### ModelServeMini Application 배포
+
+Kafka Topic 생성이 완료되면 API와 Worker, GPU 서비스를 배포합니다.
+
+```bash
+sudo k3s kubectl apply -f k8s/api-deployment.yaml
+sudo k3s kubectl apply -f k8s/api-service.yaml
+
+sudo k3s kubectl apply -f k8s/cpu-worker-deployment.yaml
+sudo k3s kubectl apply -f k8s/completion-worker-deployment.yaml
+
+sudo k3s kubectl apply -f k8s/gpu-scheduler-deployment.yaml
+sudo k3s kubectl apply -f k8s/gpu-scheduler-service.yaml
+
+sudo k3s kubectl apply -f k8s/gpu-inference-deployment.yaml
+sudo k3s kubectl apply -f k8s/gpu-inference-service.yaml
+
+sudo k3s kubectl apply -f k8s/gpu-worker-deployment.yaml
+```
+
+전체 Pod 상태를 확인합니다.
+
+```bash
+sudo k3s kubectl get pods
+```
+
+정상적인 경우 다음 구성요소들이 실행됩니다.
+
+```text
+api
+cpu-worker × 3
+completion-worker
+gpu-worker
+gpu-inference
+gpu-scheduler
+kafka
+redis
+```
+
+`kafka-init`은 Topic 생성을 위한 일회성 Job이므로 `Completed` 상태가 정상입니다.
+
+---
 
 Pod 확인:
 
