@@ -436,6 +436,13 @@ PostgreSQL 상태를 확인합니다.
 docker compose ps
 ```
 
+#### 데이터베이스 초기화
+```angular2html
+docker compose run --rm db-init
+
+docker compose logs db-init
+```
+
 PostgreSQL이 정상적으로 실행된 것을 확인한 후 Kubernetes Resource를 배포합니다.
 
 #### Kafka / Redis 배포
@@ -523,26 +530,6 @@ redis
 
 ---
 
-Pod 확인:
-
-```bash
-sudo k3s kubectl get pods
-```
-
-정상 실행 상태:
-
-```text
-api                 Running
-cpu-worker × 3      Running
-gpu-worker          Running
-gpu-inference       Running
-gpu-scheduler       Running
-completion-worker   Running
-kafka               Running
-redis               Running
-```
-
----
 
 ### 12. FastAPI 접속
 
@@ -577,39 +564,17 @@ Ctrl + C
 GPU 환경에서 다음 전체 흐름을 테스트할 수 있습니다.
 
 ```text
-Dataset 생성
-    ↓
-DatasetVersion CSV 업로드
-    ↓
-DatasetVersion 검증
-    ↓
-Model 생성
-    ↓
-Training 요청
-    ↓
-Kafka
-    ├── CPU Training
-    └── GPU Training
-            ↓
-      GPU Scheduler
-    ↓
-Completion Worker
-    ↓
-Redis Pub/Sub
-    ↓
-SSE
-    ↓
-TrainingBatch 결과
-    ↓
-ModelVersion
-    ↓
-Deploy
-    ↓
-Inference
-    ├── CPU Inference
-    └── GPU Inference
-            ↓
-      GPU Scheduler
+(member_id 1번 사용 가능)
+1. Dataset 생성
+2. DatasetVersion 생성 (CSV 업로드)
+3. DatasetVersion validate
+4. Model 생성 (논리적 모델)
+5. Training 요청
+6. CPU 알고리즘 3개 Job 생성 확인
+7. SSE 진행상황 확인(학습에 시간이 좀 걸리는 데이터셋이 필요함)
+8. TrainingBatch 결과 확인
+9. ModelVersion 확인, ModelVersion 한 개 선택, Deploy
+10. CPU Inference
 ```
 
 GPU Training 중 GPU Inference 요청을 발생시켜 다음 흐름도 테스트할 수 있습니다.
@@ -719,29 +684,3 @@ http://localhost:8002/docs
 
 로 접속합니다.
 
----
-
-### 15. Notes
-
-현재 Kubernetes 환경은 로컬 단일 Node 환경에서
-GPU Resource Scheduling 구조를 검증하기 위한 구성입니다.
-
-```text
-Single Node k3s
-RTX 3090
-NVIDIA Device Plugin Time-Slicing
-Redis Priority GPU Scheduler
-Kafka Async Training Workers
-PyTorch Checkpoint / Preemption / Resume
-```
-
-Production 환경에서는 추가적으로 다음 요소를 고려할 수 있습니다.
-
-```text
-Container Registry
-PersistentVolume / PersistentVolumeClaim
-Object Storage (S3 / MinIO)
-Multi-node GPU Scheduling
-Authentication / Authorization
-Monitoring / Observability
-```
