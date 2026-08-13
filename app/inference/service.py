@@ -54,6 +54,6 @@ def predict_by_model_version(db: Session, model_version_id: int,
 def _call_service(db: Session, model_version_cache: ModelVersionCache, request: InferenceRequest) -> InferenceResponse:
 
     if model_version_cache.algorithm in GPU_ALGORITHMS:
-        return gpu_client.predict(model_version_cache.id, request)
+        return gpu_client.predict(model_version_cache, request)
 
     return cpu_service.predict(db, model_version_cache, request)

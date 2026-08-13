@@ -19,4 +19,6 @@ class Settings(BaseSettings):
 
     gpu_scheduler_url: str = "http://localhost:8010"
 
+    enable_gpu_training: bool = False
+
 settings = Settings()

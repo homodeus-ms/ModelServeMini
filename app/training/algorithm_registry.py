@@ -80,4 +80,16 @@ CPU_ALGORITHMS = {
     if spec.device == ExecutionDevice.CPU
 }
 
+def get_algorithms_by_task_type(task_type: ModelTaskType, enable_gpu: bool = True) -> list[TrainingAlgorithm]:
+
+    algorithms = ALGORITHMS_BY_TASK_TYPE.get(task_type, [])
+
+    if enable_gpu:
+        return algorithms
+
+    return [
+        algorithm
+        for algorithm in algorithms
+        if ALGORITHM_REGISTRY[algorithm].device == ExecutionDevice.CPU
+    ]
 

@@ -28,6 +28,7 @@ from app.inference.exceptions import (
     ModelArtifactNotFound,
     InvalidInferenceInputValue
 )
+from app.inference.gpu.schema import GpuInferenceRequest
 
 from app.inference.schema import InferenceRequest, InferenceResponse
 from app.training.pytorch.preprocessing import prepare_inference_data
@@ -35,7 +36,7 @@ from app.training.pytorch.preprocessing import prepare_inference_data
 logger = logging.getLogger(__name__)
 
 # Gpu scheduler 를 사용하기 위한 wrapper함수
-def predict(db: Session, model_version_id: int, request: InferenceRequest) -> InferenceResponse:
+def predict(request: GpuInferenceRequest) -> InferenceResponse:
 
     task_id = f"inference-{uuid4()}"
     gpu_acquired = False
@@ -49,7 +50,7 @@ def predict(db: Session, model_version_id: int, request: InferenceRequest) -> In
 
         logger.info("GPU acquired: task_id=%s",task_id)
 
-        return _predict(db, model_version_id, request)
+        return _predict(request)
 
     finally:
         if gpu_acquired:
@@ -62,21 +63,17 @@ def predict(db: Session, model_version_id: int, request: InferenceRequest) -> In
                 logger.exception("failed to release GPU: task_id=%s",task_id)
 
 
-def _predict(db: Session, model_version_id: int, request: InferenceRequest) -> InferenceResponse:
+def _predict(request: GpuInferenceRequest) -> InferenceResponse:
 
     total_started_at = time.perf_counter()
 
     try:
 
-        model_version = model_version_repository.find_by_id(db, model_version_id)
-        if model_version is None: raise ModelVersionNotFound(model_version_id)
-
-        #artifact_path = Path(model_version.artifact_uri)
-        artifact_path = (Path(settings.model_storage_path) / model_version.artifact_uri)
+        artifact_path = (Path(settings.model_storage_path) / request.artifact_uri)
         if not artifact_path.exists():
-            raise ModelArtifactNotFound(model_version.artifact_uri)
+            raise ModelArtifactNotFound(request.artifact_uri)
 
-        expected_columns = _get_expected_columns(model_version.input_schema)
+        expected_columns = _get_expected_columns(request.input_schema)
         _validate_input_columns(request.input, expected_columns)
 
         ordered_input = _create_ordered_input(request.input, expected_columns)
@@ -84,7 +81,9 @@ def _predict(db: Session, model_version_id: int, request: InferenceRequest) -> I
 
         # Artifact load
         started_at = time.perf_counter()
-        artifact = load_model_artifact(model_version_id, artifact_path)
+        artifact = load_model_artifact(request.model_version_id, artifact_path)
+
+        # TEMP : For Benchmark
         logger.info("artifact load time: %.2f ms",(time.perf_counter() - started_at) * 1000)
 
 
@@ -110,14 +109,14 @@ def _predict(db: Session, model_version_id: int, request: InferenceRequest) -> I
         )
 
         return InferenceResponse(
-            model_version_id=model_version.id,
+            model_version_id=request.model_version_id,
             prediction=prediction,
             probabilities=probabilities
         )
 
     finally:
         elapsed_ms = (time.perf_counter() - total_started_at) * 1000
-        logger.info(f"GPU inferenced completed. {model_version_id}'s latency is {elapsed_ms} ms")
+        logger.info(f"GPU inferenced completed. {request.model_version_id}'s latency is {elapsed_ms} ms")
 
 
 def _predict_by_task_type(artifact,

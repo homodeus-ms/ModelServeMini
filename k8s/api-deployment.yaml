@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: api
+
+  template:
+    metadata:
+      labels:
+        app: api
+
+    spec:
+      containers:
+        - name: api
+
+          image: modelservemini-api:latest
+          imagePullPolicy: Never
+
+          command:
+            - uvicorn
+            - app.main:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "8000"
+
+          ports:
+            - containerPort: 8000
+
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: "kafka:29092"
+
+            - name: REDIS_HOST
+              value: "redis"
+
+            - name: REDIS_PORT
+              value: "6379"
+
+            - name: DATASET_STORAGE_PATH
+              value: "/app/storage/datasets"
+
+            - name: MODEL_STORAGE_PATH
+              value: "/app/storage"
+
+            - name: ENABLE_GPU_TRAINING
+              value: "true"
+
+            - name: GPU_INFERENCE_URL
+              value: "http://gpu-inference:8001"
+
+          volumeMounts:
+            - name: storage
+              mountPath: /app/storage
+
+      volumes:
+        - name: storage
+          hostPath:
+            path: /mnt/c/dev/modelServeMini/storage
+            type: Directory

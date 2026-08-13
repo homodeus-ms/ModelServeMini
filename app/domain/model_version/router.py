@@ -32,6 +32,6 @@ def get_model_versions(
         model_id
     )
 
-@router.get("{model_version_id}/deploy", response_model=ModelVersionResponse)
+@router.post("{model_version_id}/deploy", response_model=ModelVersionResponse)
 def deploy_model_version(model_version_id: int, db: Session = Depends(get_db)):
     return service.deploy_model_version(db, model_version_id)

@@ -1,6 +1,7 @@
 import logging
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.domain.dataset_version import repository as dataset_version_repository
 from app.domain.dataset_version.exceptions import DatasetVersionNotFound
 
@@ -18,7 +19,7 @@ from app.training.completion_service import (
     complete_training_job,
     fail_training_job
 )
-from app.training.algorithm_registry import ALGORITHMS_BY_TASK_TYPE
+from app.training.algorithm_registry import ALGORITHMS_BY_TASK_TYPE, get_algorithms_by_task_type
 from app.training.exceptions import NotValidTaskType
 from app.training.schema import (TrainingRequest,
                                  TrainingResultResponse,
@@ -34,7 +35,9 @@ def process_trainings_by_request(db: Session, request: TrainingRequest, member_i
 
     logger.info("== process_trainings_by_request start ==")
 
-    algorithm_list = ALGORITHMS_BY_TASK_TYPE.get(request.task_type)
+    algorithm_list = get_algorithms_by_task_type(task_type=request.task_type,
+                                                 enable_gpu=settings.enable_gpu_training)
+
     if (algorithm_list is None) or (len(algorithm_list) == 0):
         raise NotValidTaskType("Task type not supported")
 
