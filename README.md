@@ -360,7 +360,7 @@ CPU 기반 학습 및 추론 파이프라인을 실행해 볼 수 있습니다.
 - Docker Compose
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/homodeus-ms/ModelServeMini.git
 
 cd ModelServeMini
 
