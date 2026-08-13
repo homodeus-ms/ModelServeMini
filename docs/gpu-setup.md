@@ -295,59 +295,117 @@ sudo k3s kubectl delete pod gpu-test
 
 ### 8. ModelServeMini Image 등록
 
-현재 프로젝트는 별도 Container Registry 대신
-Docker에서 빌드한 Local Image를 k3s containerd에 직접 등록합니다.
+현재 프로젝트는 별도 Container Registry 대신 Docker에서 빌드한 Local Image를
+k3s containerd에 직접 등록합니다.
 
-GPU Image 빌드:
+ModelServeMini에서는 일반 Python 서비스와 GPU 서비스를 각각 공통 Image로 빌드한 뒤,
+각 Kubernetes Deployment에서 사용하는 Image 이름으로 Tag를 생성합니다.
+
+#### 일반 Python Image
+
+FastAPI, CPU Worker, Completion Worker, GPU Scheduler는 기본 `Dockerfile`을 사용합니다.
+
+공통 Image 빌드:
+
+```bash
+docker build \
+  -f Dockerfile \
+  -t modelservemini-base:latest .
+```
+
+각 Kubernetes Deployment에서 사용할 Image Tag를 생성합니다.
+
+```bash
+docker tag modelservemini-base:latest modelservemini-api:latest
+docker tag modelservemini-base:latest modelservemini-cpu-worker:latest
+docker tag modelservemini-base:latest modelservemini-completion-worker:latest
+docker tag modelservemini-base:latest modelservemini-gpu-scheduler:latest
+```
+
+Image를 하나의 tar 파일로 저장합니다.
+
+```bash
+docker save \
+  modelservemini-api:latest \
+  modelservemini-cpu-worker:latest \
+  modelservemini-completion-worker:latest \
+  modelservemini-gpu-scheduler:latest \
+  -o modelservemini-base.tar
+```
+
+k3s containerd에 등록합니다.
+
+```bash
+sudo k3s ctr -n k8s.io images import \
+  modelservemini-base.tar
+```
+
+#### GPU Image
+
+GPU Worker와 GPU Inference는 `Dockerfile.gpu`를 사용합니다.
+
+공통 GPU Image 빌드:
 
 ```bash
 docker build \
   -f Dockerfile.gpu \
-  -t model-serve-mini-gpu:latest .
+  -t modelservemini-gpu-base:latest .
 ```
 
-Image 저장:
+GPU Worker와 GPU Inference에서 사용할 Image Tag를 생성합니다.
 
 ```bash
-docker save model-serve-mini-gpu:latest \
-  -o model-serve-mini-gpu.tar
+docker tag modelservemini-gpu-base:latest modelservemini-gpu-worker:latest
+docker tag modelservemini-gpu-base:latest modelservemini-gpu-inference:latest
 ```
 
-k3s containerd에 등록:
+Image를 하나의 tar 파일로 저장합니다.
+
+```bash
+docker save \
+  modelservemini-gpu-worker:latest \
+  modelservemini-gpu-inference:latest \
+  -o modelservemini-gpu.tar
+```
+
+k3s containerd에 등록합니다.
 
 ```bash
 sudo k3s ctr -n k8s.io images import \
-  model-serve-mini-gpu.tar
+  modelservemini-gpu.tar
 ```
 
-확인:
+#### Image 등록 확인
 
 ```bash
 sudo k3s ctr -n k8s.io images list \
-  | grep model-serve-mini-gpu
+  | grep modelservemini
 ```
 
-FastAPI Image 역시 같은 방식으로 등록합니다.
+다음 Image들이 등록되어 있어야 합니다.
 
-```bash
-docker compose build api
-
-docker save modelservemini-api:latest \
-  -o modelservemini-api.tar
-
-sudo k3s ctr -n k8s.io images import \
-  modelservemini-api.tar
+```text
+modelservemini-api:latest
+modelservemini-cpu-worker:latest
+modelservemini-completion-worker:latest
+modelservemini-gpu-scheduler:latest
+modelservemini-gpu-worker:latest
+modelservemini-gpu-inference:latest
 ```
 
-Deployment에서는 Local Image를 사용합니다.
+Kubernetes Deployment에서는 Local Image를 사용하므로 다음 설정을 사용합니다.
 
 ```yaml
 imagePullPolicy: Never
 ```
 
-> 다른 환경에서는 Image를 직접 빌드하여 containerd에 import하거나
-> Container Registry를 사용해야 합니다.
+따라서 k3s containerd에 등록된 Image 이름과 각 Deployment YAML의 `image` 이름이
+정확히 일치해야 합니다.
 
+> 다른 환경에서는 Image를 직접 빌드하여 containerd에 import하거나
+> Container Registry를 사용할 수 있습니다.
+
+---
 ---
 
 ### 9. Kubernetes Components
