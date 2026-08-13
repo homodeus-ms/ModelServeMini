@@ -355,6 +355,8 @@ CPU 기반 학습 및 추론 파이프라인을 실행해 볼 수 있습니다.
 
 ### CPU Quick Start
 
+Windows + WSL2 환경에서는 Docker Desktop의 WSL Integration을 활성화해야 합니다.
+
 필요 환경:
 - Docker
 - Docker Compose
