@@ -6,35 +6,63 @@
 #### 1.1 Cache Miss
 ```
 benchmark start...
-01: 2895.87 ms
-02: 82.27 ms
-03: 84.17 ms
-04: 89.58 ms
-05: 86.70 ms
-06: 80.22 ms
-07: 85.33 ms
-08: 90.88 ms
-09: 87.11 ms
-10: 96.20 ms
-11: 83.71 ms
-12: 88.85 ms
-13: 75.75 ms
-14: 83.40 ms
-15: 80.73 ms
-16: 86.54 ms
-17: 81.38 ms
-18: 83.91 ms
-19: 84.80 ms
-20: 88.67 ms
+01: 2235.03 ms
+02: 129.51 ms
+03: 130.30 ms
+04: 106.96 ms
+05: 115.15 ms
+06: 117.14 ms
+07: 125.79 ms
+08: 110.50 ms
+09: 128.38 ms
+10: 120.99 ms
+11: 123.95 ms
+12: 138.90 ms
+13: 113.88 ms
+14: 126.92 ms
+15: 125.03 ms
+16: 127.98 ms
+17: 131.89 ms
+18: 111.13 ms
+19: 130.38 ms
+20: 117.97 ms
 
 === Benchmark Result ===
 count : 20
-mean  : 225.80 ms
-p50   : 85.07 ms
-p95   : 236.18 ms
-min   : 75.75 ms
-max   : 2895.87 ms
+mean  : 228.39 ms
+p50   : 125.41 ms
+p95   : 243.71 ms
+min   : 106.96 ms
+max   : 2235.03 ms
+
 ```
+<br>
+
+#### 1.1.1 GPU latency log
+```
+1 / artifact load : 20.90 ms, dataframe build : 20.69 ms, predict : 110.70 ms, 총 latency : 155.74 ms
+2 / artifact load : 16.73 ms, dataframe build : 12.43 ms, predict : 93.07 ms, 총 latency : 124.92 ms
+3 / artifact load : 18.94 ms, dataframe build : 9.11 ms, predict : 93.01 ms, 총 latency : 125.98 ms
+4 / artifact load : 19.91 ms, dataframe build : 7.67 ms, predict : 70.27 ms, 총 latency : 102.10 ms
+5 / artifact load : 21.50 ms, dataframe build : 11.02 ms, predict : 72.58 ms, 총 latency : 110.20 ms
+6 / artifact load : 23.53 ms, dataframe build : 9.68 ms, predict : 72.20 ms, 총 latency : 111.01 ms
+7 / artifact load : 22.13 ms, dataframe build : 8.46 ms, predict : 86.23 ms, 총 latency : 121.30 ms
+8 / artifact load : 17.83 ms, dataframe build : 11.14 ms, predict : 72.84 ms, 총 latency : 106.26 ms
+9 / artifact load : 26.22 ms, dataframe build : 10.53 ms, predict : 81.18 ms, 총 latency : 122.93 ms
+10 / artifact load : 17.03 ms, dataframe build : 12.14 ms, predict : 78.57 ms, 총 latency : 114.13 ms
+11 / artifact load : 21.66 ms, dataframe build : 8.73 ms, predict : 83.87 ms, 총 latency : 119.33 ms
+12 / artifact load : 31.75 ms, dataframe build : 14.96 ms, predict : 82.91 ms, 총 latency : 134.61 ms
+13 / artifact load : 17.79 ms, dataframe build : 8.09 ms, predict : 78.68 ms, 총 latency : 109.56 ms
+14 / artifact load : 27.03 ms, dataframe build : 12.18 ms, predict : 80.15 ms, 총 latency : 122.41 ms
+15 / artifact load : 20.40 ms, dataframe build : 6.96 ms, predict : 86.65 ms, 총 latency : 119.03 ms
+16 / artifact load : 26.66 ms, dataframe build : 15.35 ms, predict : 75.19 ms, 총 latency : 122.84 ms
+17 / artifact load : 16.21 ms, dataframe build : 13.06 ms, predict : 91.79 ms, 총 latency : 123.81 ms
+18 / artifact load : 17.51 ms, dataframe build : 11.22 ms, predict : 72.58 ms, 총 latency : 104.95 ms
+19 / artifact load : 16.70 ms, dataframe build : 10.95 ms, predict : 90.34 ms, 총 latency : 123.93 ms
+20 / artifact load : 21.22 ms, dataframe build : 10.43 ms, predict : 76.04 ms, 총 latency : 112.97 ms
+```
+
+
 
 #### 1.2 Cache Hit
 ```
@@ -99,6 +127,71 @@ p95   : 105.40 ms
 min   : 82.58 ms
 max   : 109.41 ms
 ```
+
+<br>
+
+#### 1.2.1 GPU latency log
+```
+1 / artifact load : 0.09 ms, dataframe build : 16.72 ms, predict : 114.66 ms, 총 latency : 136.53 ms
+2 / artifact load : 0.07 ms, dataframe build : 17.50 ms, predict : 111.50 ms, 총 latency : 132.97 ms
+3 / artifact load : 0.08 ms, dataframe build : 17.22 ms, predict : 73.71 ms, 총 latency : 96.00 ms
+4 / artifact load : 0.07 ms, dataframe build : 10.49 ms, predict : 74.62 ms, 총 latency : 90.15 ms
+5 / artifact load : 0.15 ms, dataframe build : 9.63 ms, predict : 77.01 ms, 총 latency : 91.25 ms
+
+↑↑↑↑↑ Warm up 
+
+6 / artifact load : 0.07 ms, dataframe build : 10.84 ms, predict : 70.05 ms, 총 latency : 86.04 ms
+7 / artifact load : 0.07 ms, dataframe build : 10.61 ms, predict : 72.04 ms, 총 latency : 88.08 ms
+8 / artifact load : 0.10 ms, dataframe build : 10.60 ms, predict : 78.22 ms, 총 latency : 91.95 ms
+9 / artifact load : 0.07 ms, dataframe build : 10.77 ms, predict : 74.26 ms, 총 latency : 87.33 ms
+10 / artifact load : 0.06 ms, dataframe build : 6.70 ms, predict : 67.82 ms, 총 latency : 77.52 ms
+11 / artifact load : 0.06 ms, dataframe build : 6.43 ms, predict : 74.26 ms, 총 latency : 83.67 ms
+12 / artifact load : 0.06 ms, dataframe build : 10.94 ms, predict : 68.71 ms, 총 latency : 82.14 ms
+13 / artifact load : 0.06 ms, dataframe build : 9.49 ms, predict : 68.20 ms, 총 latency : 80.61 ms
+14 / artifact load : 0.06 ms, dataframe build : 6.33 ms, predict : 78.15 ms, 총 latency : 87.86 ms
+15 / artifact load : 0.07 ms, dataframe build : 11.78 ms, predict : 70.93 ms, 총 latency : 86.57 ms
+16 / artifact load : 0.07 ms, dataframe build : 10.23 ms, predict : 69.61 ms, 총 latency : 83.32 ms
+17 / artifact load : 0.06 ms, dataframe build : 6.51 ms, predict : 84.89 ms, 총 latency : 95.65 ms
+18 / artifact load : 0.06 ms, dataframe build : 6.39 ms, predict : 67.94 ms, 총 latency : 78.08 ms
+19 / artifact load : 0.06 ms, dataframe build : 6.31 ms, predict : 69.27 ms, 총 latency : 77.74 ms
+20 / artifact load : 0.07 ms, dataframe build : 10.04 ms, predict : 83.59 ms, 총 latency : 98.55 ms
+21 / artifact load : 0.07 ms, dataframe build : 9.51 ms, predict : 77.38 ms, 총 latency : 91.09 ms
+22 / artifact load : 0.06 ms, dataframe build : 10.85 ms, predict : 71.23 ms, 총 latency : 87.47 ms
+23 / artifact load : 0.08 ms, dataframe build : 15.73 ms, predict : 80.15 ms, 총 latency : 100.94 ms
+24 / artifact load : 0.06 ms, dataframe build : 9.31 ms, predict : 70.84 ms, 총 latency : 85.35 ms
+25 / artifact load : 0.06 ms, dataframe build : 6.77 ms, predict : 71.07 ms, 총 latency : 80.79 ms
+26 / artifact load : 0.07 ms, dataframe build : 7.59 ms, predict : 80.16 ms, 총 latency : 90.28 ms
+27 / artifact load : 0.07 ms, dataframe build : 13.81 ms, predict : 72.26 ms, 총 latency : 91.88 ms
+28 / artifact load : 0.06 ms, dataframe build : 8.71 ms, predict : 69.08 ms, 총 latency : 80.49 ms
+29 / artifact load : 0.07 ms, dataframe build : 6.44 ms, predict : 82.10 ms, 총 latency : 93.85 ms
+30 / artifact load : 0.06 ms, dataframe build : 7.99 ms, predict : 71.15 ms, 총 latency : 82.70 ms
+31 / artifact load : 0.07 ms, dataframe build : 11.08 ms, predict : 71.21 ms, 총 latency : 87.36 ms
+32 / artifact load : 0.07 ms, dataframe build : 10.11 ms, predict : 78.66 ms, 총 latency : 92.62 ms
+33 / artifact load : 0.06 ms, dataframe build : 9.47 ms, predict : 84.57 ms, 총 latency : 96.91 ms
+34 / artifact load : 0.08 ms, dataframe build : 12.77 ms, predict : 82.67 ms, 총 latency : 99.76 ms
+35 / artifact load : 0.07 ms, dataframe build : 7.21 ms, predict : 73.78 ms, 총 latency : 85.38 ms
+36 / artifact load : 0.06 ms, dataframe build : 10.16 ms, predict : 71.81 ms, 총 latency : 85.95 ms
+37 / artifact load : 0.06 ms, dataframe build : 6.81 ms, predict : 81.46 ms, 총 latency : 92.49 ms
+38 / artifact load : 0.06 ms, dataframe build : 10.34 ms, predict : 79.43 ms, 총 latency : 94.14 ms
+39 / artifact load : 0.07 ms, dataframe build : 7.44 ms, predict : 71.77 ms, 총 latency : 84.54 ms
+40 / artifact load : 0.06 ms, dataframe build : 11.19 ms, predict : 77.37 ms, 총 latency : 93.43 ms
+41 / artifact load : 0.07 ms, dataframe build : 12.30 ms, predict : 73.22 ms, 총 latency : 89.78 ms
+42 / artifact load : 0.07 ms, dataframe build : 9.08 ms, predict : 71.23 ms, 총 latency : 82.89 ms
+43 / artifact load : 0.07 ms, dataframe build : 10.82 ms, predict : 79.57 ms, 총 latency : 94.88 ms
+44 / artifact load : 0.06 ms, dataframe build : 11.15 ms, predict : 78.48 ms, 총 latency : 93.13 ms
+45 / artifact load : 0.23 ms, dataframe build : 7.55 ms, predict : 75.72 ms, 총 latency : 85.78 ms
+46 / artifact load : 0.07 ms, dataframe build : 10.12 ms, predict : 78.86 ms, 총 latency : 93.78 ms
+47 / artifact load : 0.07 ms, dataframe build : 7.02 ms, predict : 71.31 ms, 총 latency : 83.83 ms
+48 / artifact load : 0.06 ms, dataframe build : 7.39 ms, predict : 71.29 ms, 총 latency : 81.70 ms
+49 / artifact load : 0.08 ms, dataframe build : 12.65 ms, predict : 83.04 ms, 총 latency : 101.20 ms
+50 / artifact load : 0.07 ms, dataframe build : 11.85 ms, predict : 75.75 ms, 총 latency : 91.23 ms
+51 / artifact load : 0.07 ms, dataframe build : 11.18 ms, predict : 70.09 ms, 총 latency : 85.72 ms
+52 / artifact load : 0.07 ms, dataframe build : 6.26 ms, predict : 87.34 ms, 총 latency : 98.14 ms
+53 / artifact load : 0.07 ms, dataframe build : 9.83 ms, predict : 76.94 ms, 총 latency : 90.99 ms
+54 / artifact load : 0.07 ms, dataframe build : 9.41 ms, predict : 70.14 ms, 총 latency : 83.88 ms
+55 / artifact load : 0.06 ms, dataframe build : 7.03 ms, predict : 90.26 ms, 총 latency : 99.65 ms
+```
+
 <br>
 
 #### 1.3 Result
