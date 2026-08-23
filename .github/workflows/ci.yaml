@@ -38,33 +38,34 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build CPU image
-        if: github.event_name == 'push'
-        run: |
-          docker build \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini:${{ github.sha }} \
-            -f Dockerfile \
-            .
 
-      - name: Push CPU image
+      # build cpu, gpu image and cache
+      - name: Set up Docker Buildx
         if: github.event_name == 'push'
-        run: |
-          docker push \
-            ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini:${{ github.sha }}
-
-      - name: Build GPU image
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build and push CPU image
         if: github.event_name == 'push'
-        run: |
-          docker build \
-            -t ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini-gpu:${{ github.sha }} \
-            -f Dockerfile.gpu \
-            .
-
-      - name: Push GPU image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini:${{ github.sha }}
+          # gha(hit hub action cache)
+          cache-from: type=gha,scope=cpu
+          cache-to: type=gha,mode=max,scope=cpu
+      
+      - name: Build and push GPU image
         if: github.event_name == 'push'
-        run: |
-          docker push \
-            ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini-gpu:${{ github.sha }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.gpu
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini-gpu:${{ github.sha }}
+          cache-from: type=gha,scope=gpu
+          cache-to: type=gha,mode=max,scope=gpu
 
 
       # apply new docker image version to helm values.yaml
