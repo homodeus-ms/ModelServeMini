@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: gpu-worker
+
+spec:
+  replicas: {{ .Values.gpuWorker.replicas }}
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: gpu-worker
+
+  template:
+    metadata:
+      labels:
+        app: gpu-worker
+
+    spec:
+      runtimeClassName: {{ .Values.gpu.runtimeClassName }}
+
+      containers:
+        - name: gpu-worker
+          image: "{{ .Values.image.gpu.repository }}:{{ .Values.image.gpu.tag }}"
+          imagePullPolicy: {{ .Values.image.gpu.pullPolicy }}
+
+          command:
+            - python
+
+          args:
+            - -m
+            - app.kafka.gpu_consumer
+
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
+
+            - name: KAFKA_TOPIC
+              value: {{ .Values.kafka.topics.gpu.name | quote }}
+
+            - name: KAFKA_GROUP_ID
+              value: {{ .Values.gpuWorker.groupId | quote }}
+
+            - name: WORKER_DEVICE
+              value: {{ .Values.gpuWorker.device | quote }}
+
+            - name: DATABASE_URL
+              value: {{ .Values.database.url | quote }}
+
+            - name: DATASET_STORAGE_PATH
+              value: {{ .Values.storage.datasetPath | quote }}
+
+            - name: MODEL_STORAGE_PATH
+              value: {{ .Values.storage.modelPath | quote }}
+
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+
+            - name: GPU_SCHEDULER_URL
+              value: "http://gpu-scheduler:{{ .Values.gpuScheduler.port }}"
+
+          volumeMounts:
+            - name: storage
+              mountPath: {{ .Values.storage.mountPath | quote }}
+
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.gpu.resourceLimit }}
+
+      volumes:
+        - name: storage
+          hostPath:
+            path: {{ .Values.storage.hostPath | quote }}
+            type: Directory

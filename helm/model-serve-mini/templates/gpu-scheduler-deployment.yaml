@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: gpu-scheduler
+
+spec:
+  replicas: {{ .Values.gpuScheduler.replicas }}
+
+  selector:
+    matchLabels:
+      app: gpu-scheduler
+
+  template:
+    metadata:
+      labels:
+        app: gpu-scheduler
+
+    spec:
+      containers:
+        - name: gpu-scheduler
+          image: "{{ .Values.image.cpu.repository }}:{{ .Values.image.cpu.tag }}"
+          imagePullPolicy: {{ .Values.image.cpu.pullPolicy }}
+
+          command:
+            - python
+            - -m
+            - uvicorn
+            - app.gpu_scheduler.main:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - {{ .Values.gpuScheduler.port | quote }}
+
+          ports:
+            - containerPort: {{ .Values.gpuScheduler.port }}
+
+          env:
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+
+            - name: DATABASE_URL
+              value: {{ .Values.database.url | quote }}
+
+            - name: DATASET_STORAGE_PATH
+              value: {{ .Values.storage.datasetPath | quote }}
+
+            - name: MODEL_STORAGE_PATH
+              value: {{ .Values.storage.modelPath | quote }}
+
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: gpu-scheduler
+
+spec:
+  selector:
+    app: gpu-scheduler
+
+  ports:
+    - protocol: TCP
+      port: {{ .Values.gpuScheduler.port }}
+      targetPort: {{ .Values.gpuScheduler.port }}
+
+  type: ClusterIP

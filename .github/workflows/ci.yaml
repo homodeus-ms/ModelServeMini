@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python -m pytest
+
+      # Docker
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build CPU image
+        if: github.event_name == 'push'
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini:${{ github.sha }} \
+            -f Dockerfile \
+            .
+
+      - name: Push CPU image
+        if: github.event_name == 'push'
+        run: |
+          docker push \
+            ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini:${{ github.sha }}
+
+      - name: Build GPU image
+        if: github.event_name == 'push'
+        run: |
+          docker build \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini-gpu:${{ github.sha }} \
+            -f Dockerfile.gpu \
+            .
+
+      - name: Push GPU image
+        if: github.event_name == 'push'
+        run: |
+          docker push \
+            ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini-gpu:${{ github.sha }}

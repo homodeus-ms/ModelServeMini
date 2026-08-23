@@ -1,0 +1,60 @@
+apiVersion: batch/v1
+kind: Job
+
+metadata:
+  name: kafka-init
+
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+
+      containers:
+        - name: kafka-init
+          image: "{{ .Values.kafka.image.repository }}:{{ .Values.kafka.image.tag }}"
+
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for Kafka..."
+
+              until /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:{{ .Values.kafka.ports.internal }} \
+                --list > /dev/null 2>&1
+              do
+                echo "Kafka is not ready yet..."
+                sleep 2
+              done
+
+              echo "Creating CPU topic..."
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:{{ .Values.kafka.ports.internal }} \
+                --create \
+                --if-not-exists \
+                --topic {{ .Values.kafka.topics.cpu.name }} \
+                --partitions {{ .Values.kafka.topics.cpu.partitions }} \
+                --replication-factor {{ .Values.kafka.topics.cpu.replicationFactor }}
+
+              echo "Creating GPU topic..."
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:{{ .Values.kafka.ports.internal }} \
+                --create \
+                --if-not-exists \
+                --topic {{ .Values.kafka.topics.gpu.name }} \
+                --partitions {{ .Values.kafka.topics.gpu.partitions }} \
+                --replication-factor {{ .Values.kafka.topics.gpu.replicationFactor }}
+
+              echo "Creating Completion topic..."
+
+              /opt/kafka/bin/kafka-topics.sh \
+                --bootstrap-server kafka:{{ .Values.kafka.ports.internal }} \
+                --create \
+                --if-not-exists \
+                --topic {{ .Values.kafka.topics.completion.name }} \
+                --partitions {{ .Values.kafka.topics.completion.partitions }} \
+                --replication-factor {{ .Values.kafka.topics.completion.replicationFactor }}
+
+              echo "Kafka topics initialized."

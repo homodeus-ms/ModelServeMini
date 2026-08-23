@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-inference
+
+spec:
+  replicas: {{ .Values.gpuInference.replicas }}
+
+  strategy:
+    type: Recreate
+
+  selector:
+    matchLabels:
+      app: gpu-inference
+
+  template:
+    metadata:
+      labels:
+        app: gpu-inference
+
+    spec:
+      runtimeClassName: {{ .Values.gpu.runtimeClassName }}
+
+      containers:
+        - name: gpu-inference
+          image: "{{ .Values.image.gpu.repository }}:{{ .Values.image.gpu.tag }}"
+          imagePullPolicy: {{ .Values.image.gpu.pullPolicy }}
+
+          command:
+            - uvicorn
+
+          args:
+            - app.inference.gpu.main:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - {{ .Values.gpuInference.port | quote }}
+
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.database.url | quote }}
+
+            - name: MODEL_STORAGE_PATH
+              value: {{ .Values.storage.modelPath | quote }}
+
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+
+            - name: GPU_SCHEDULER_URL
+              value: "http://gpu-scheduler:{{ .Values.gpuScheduler.port }}"
+
+          ports:
+            - containerPort: {{ .Values.gpuInference.port }}
+
+          volumeMounts:
+            - name: model-storage
+              mountPath: {{ .Values.storage.mountPath | quote }}
+
+          resources:
+            limits:
+              nvidia.com/gpu: {{ .Values.gpu.resourceLimit }}
+
+      volumes:
+        - name: model-storage
+          hostPath:
+            path: {{ .Values.storage.hostPath | quote }}
+            type: Directory

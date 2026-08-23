@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+
+spec:
+  replicas: {{ .Values.api.replicas }}
+
+  selector:
+    matchLabels:
+      app: api
+
+  template:
+    metadata:
+      labels:
+        app: api
+
+    spec:
+      containers:
+        - name: api
+
+          image: "{{ .Values.image.cpu.repository }}:{{ .Values.image.cpu.tag }}"
+          imagePullPolicy: {{ .Values.image.cpu.pullPolicy }}
+
+          command:
+            - uvicorn
+            - app.main:app
+            - --host
+            - "0.0.0.0"
+            - --port
+            - {{ .Values.api.port | quote }}
+
+          ports:
+            - containerPort: {{ .Values.api.port }}
+
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.database.url | quote }}
+
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.kafka.bootstrapServers | quote }}
+
+            - name: REDIS_HOST
+              value: {{ .Values.redis.host | quote }}
+
+            - name: REDIS_PORT
+              value: {{ .Values.redis.port | quote }}
+
+            - name: DATASET_STORAGE_PATH
+              value: {{ .Values.storage.datasetPath | quote }}
+
+            - name: MODEL_STORAGE_PATH
+              value: {{ .Values.storage.modelPath | quote }}
+
+            - name: ENABLE_GPU_TRAINING
+              value: {{ .Values.gpu.enabled | quote }}
+
+            - name: GPU_INFERENCE_URL
+              value: "http://gpu-inference:{{ .Values.gpuInference.port }}"
+
+          volumeMounts:
+            - name: storage
+              mountPath: /app/storage
+
+      volumes:
+        - name: storage
+          hostPath:
+            path: {{ .Values.storage.hostPath | quote }}
+            type: Directory

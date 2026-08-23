@@ -1,0 +1,103 @@
+image:
+  cpu:
+    repository: btreeorange/modelservemini
+    tag: latest
+    pullPolicy: IfNotPresent
+
+  gpu:
+    repository: btreeorange/modelservemini-gpu
+    tag: latest
+    pullPolicy: IfNotPresent
+
+api:
+  replicas: 1
+  port: 8000
+
+database:
+  url: "postgresql+psycopg://postgres:postgres@10.255.255.254:5433/model_serve_mini"
+
+storage:
+  hostPath: "/mnt/c/dev/ModelServeMini/storage"
+  mountPath: "/app/storage"
+  datasetPath: "/app/storage/datasets"
+  modelPath: "/app/storage"
+
+cpuWorker:
+  replicas: 3
+  groupId: "cpu-training-workers"
+  device: "cpu"
+
+completionWorker:
+  replicas: 1
+  groupId: "training-completion-workers"
+
+gpuInference:
+  replicas: 1
+  port: 8001
+
+gpu:
+  enabled: "true"
+  runtimeClassName: nvidia
+  resourceLimit: 1
+
+gpuScheduler:
+  replicas: 1
+  port: 8010
+
+gpuWorker:
+  replicas: 1
+  groupId: "gpu-training-workers"
+  device: "cuda"
+
+kafka:
+  image:
+    repository: apache/kafka
+    tag: "4.1.0"
+
+  replicas: 1
+  bootstrapServers: "kafka:29092"
+
+  ports:
+    external: 9092
+    internal: 29092
+    controller: 9093
+
+  topics:
+    cpu:
+      name: "training-jobs-cpu"
+      partitions: 3
+      replicationFactor: 1
+
+    gpu:
+      name: "training-jobs-gpu"
+      partitions: 1
+      replicationFactor: 1
+
+    completion:
+      name: "training-job-completed"
+      partitions: 1
+      replicationFactor: 1
+
+  nodeId: "1"
+  processRoles: "broker,controller"
+  listeners: "EXTERNAL://:9092,INTERNAL://:29092,CONTROLLER://:9093"
+  advertisedListeners: "EXTERNAL://localhost:9092,INTERNAL://kafka:29092"
+  listenerSecurityProtocolMap: "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT"
+  interBrokerListenerName: "INTERNAL"
+  controllerListenerNames: "CONTROLLER"
+  controllerQuorumVoters: "1@localhost:9093"
+  offsetsTopicReplicationFactor: "1"
+
+  storage:
+    mountPath: "/var/lib/kafka/data"
+    size: 2Gi
+    accessMode: ReadWriteOnce
+
+redis:
+  image:
+    repository: redis
+    tag: "8"
+
+  replicas: 1
+  host: "redis"
+  port: 6379
