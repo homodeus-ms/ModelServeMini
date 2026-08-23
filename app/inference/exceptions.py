@@ -2,7 +2,6 @@ from fastapi import status
 
 from app.core.exceptions import AppException
 
-
 class ModelArtifactNotFound(AppException):
     def __init__(self, artifact_uri: str):
         super().__init__(
