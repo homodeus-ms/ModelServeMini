@@ -65,3 +65,32 @@ jobs:
         run: |
           docker push \
             ${{ secrets.DOCKERHUB_USERNAME }}/modelservemini-gpu:${{ github.sha }}
+
+
+      # apply new docker image version to helm values.yaml
+      - name: Checkout deploy repository
+        if: github.event_name == 'push'
+        uses: actions/checkout@v7
+        with:
+          repository: homodeus-ms/ModelServeMini-deploy
+          token: ${{ secrets.DEPLOY_REPO_TOKEN }}
+          path: deploy-repo
+
+      - name: Update deploy image tags
+        if: github.event_name == 'push'
+        run: |
+          yq -i '.image.cpu.tag = "${{ github.sha }}"' deploy-repo/model-serve-mini/values.yaml
+          yq -i '.image.gpu.tag = "${{ github.sha }}"' deploy-repo/model-serve-mini/values.yaml
+
+      - name: Commit and push deploy change
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          cd deploy-repo
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add model-serve-mini/values.yaml
+          git commit -m "deploy image ${{ github.sha }}"
+          git push
