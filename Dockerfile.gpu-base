@@ -1,0 +1,21 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# PyTorch
+RUN pip install --no-cache-dir \
+    torch==2.12.1 \
+    torchvision==0.27.1 \
+    --index-url https://download.pytorch.org/whl/cu130
+
+# RAPIDS
+RUN pip install --no-cache-dir \
+    --extra-index-url=https://pypi.nvidia.com \
+    cudf-cu13==26.8.0 \
+    cuml-cu13==26.8.0
+
+# RAPIDS libcuvs가 요구하는 nvJitLink 버전
+RUN pip install --no-cache-dir \
+    nvidia-nvjitlink==13.3.33
+
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.13/site-packages/libcuml/lib64:/usr/local/lib/python3.13/site-packages/libcuvs/lib64
