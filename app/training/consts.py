@@ -38,5 +38,6 @@ from app.domain.training_job.enums import TrainingAlgorithm
 #     TrainingAlgorithm.PYTORCH_MLP_REGRESSOR: ModelTaskType.REGRESSION
 # }
 
+
 DEFAULT_CLASSIFICATION_SELECTION_METRIC = "f1_score"
 DEFAULT_REGRESSION_SELECTION_METRIC = "r2"
