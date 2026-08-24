@@ -10,8 +10,11 @@ Kafka를 사용해 CPU / GPU 학습 작업을 분리했으며
 장시간 실행되는 학습 도중 예기치 못한 중지를 대비한 체크포인트 기능,   
 단일 GPU 환경에서 장시간 실행되는 training과 짧은 inference 간의 GPU 경쟁을 해결하기 위해 Priority GPU Scheduler에 의한 Preemption / Resume 기능을 제공합니다.
 
+GitHub Actions를 이용해 테스트, CPU/GPU Docker 이미지 빌드 및 배포 저장소 갱신을 자동화했으며,
+Helm과 Argo CD를 이용한 GitOps 방식으로 Kubernetes 클러스터에 자동 배포합니다.
+
 **사용기술**  
-FastAPI, PostgreSQL, Apache Kafka, Redis, Docker, Kubernetes(k3s)
+FastAPI, PostgreSQL, Apache Kafka, Redis, Docker, Kubernetes(k3s), Helm, GitHub Actions, Argo CD
 
 <br>
 
@@ -106,6 +109,40 @@ NVIDIA Device Plugin
 | GPU Scheduler | GPU 사용권 및 Training / Inference Priority 관리 |
 | Redis | SSE pub-sub 및 GPU Scheduler State, Model Version cache 관리 |
 | PostgreSQL | Dataset, Model, Training Job, Model Version Metadata 관리 |
+
+<br>
+
+### 3.1 CI/CD & GitOps
+
+GitHub Actions와 Argo CD를 이용한 자동 배포 파이프라인을 구성했습니다.
+
+```text
+Code Push
+    ↓
+GitHub Actions
+    ↓
+Test
+    ↓
+CPU / GPU Docker Image Build
+    ↓
+Docker Hub Push
+    ↓
+Deploy Repository Helm Image Tag Update
+    ↓
+Argo CD Sync
+    ↓
+Kubernetes Deployment
+```
+
+- CPU/GPU 이미지를 분리하여 빌드
+- GPU 의존성을 prebuilt base image로 분리하여 CI 시간 단축
+- Helm 기반 Kubernetes 배포 구성
+- Argo CD를 통한 GitOps 자동 배포
+- Kafka PVC를 통한 Topic / Broker 데이터 영속성 확보
+- Argo CD PostSync Hook을 통한 Kafka Topic 초기화 자동화
+
+자세한 내용: [`docs/ci-cd.md`](./docs/ci-cd.md) 참고
+
 
 <br>
 
